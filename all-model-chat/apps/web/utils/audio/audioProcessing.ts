@@ -72,51 +72,6 @@ const createWavBuffer = (pcmData: Uint8Array, sampleRate: number, numChannels: n
     return wav;
 };
 
-const hasAsciiHeader = (bytes: Uint8Array, offset: number, header: string): boolean => {
-    if (bytes.length < offset + header.length) return false;
-    for (let i = 0; i < header.length; i += 1) {
-        if (bytes[offset + i] !== header.charCodeAt(i)) return false;
-    }
-    return true;
-};
-
-const detectAudioMimeType = (bytes: Uint8Array): string | null => {
-    // WAV: RIFF....WAVE
-    if (hasAsciiHeader(bytes, 0, 'RIFF') && hasAsciiHeader(bytes, 8, 'WAVE')) {
-        return 'audio/wav';
-    }
-
-    // MP3: ID3 tag or MPEG audio frame sync
-    if (hasAsciiHeader(bytes, 0, 'ID3')) {
-        return 'audio/mpeg';
-    }
-    if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
-        return 'audio/mpeg';
-    }
-
-    // OGG container
-    if (hasAsciiHeader(bytes, 0, 'OggS')) {
-        return 'audio/ogg';
-    }
-
-    // FLAC
-    if (hasAsciiHeader(bytes, 0, 'fLaC')) {
-        return 'audio/flac';
-    }
-
-    // MP4/M4A: ....ftyp
-    if (hasAsciiHeader(bytes, 4, 'ftyp')) {
-        return 'audio/mp4';
-    }
-
-    // WebM/Matroska (EBML header)
-    if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
-        return 'audio/webm';
-    }
-
-    return null;
-};
-
 /**
  * Converts a base64 encoded PCM16 string to a WAV Blob URL.
  */
@@ -125,12 +80,7 @@ export function pcmBase64ToWavUrl(
   sampleRate = 24_000,
   numChannels = 1,
 ): string {
-  const pcm = decodeBase64ToArrayBuffer(base64);
-  const detectedMimeType = detectAudioMimeType(pcm);
-  if (detectedMimeType) {
-    return URL.createObjectURL(new Blob([pcm], { type: detectedMimeType }));
-  }
-
+  const pcm = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
   const wavBuffer = createWavBuffer(pcm, sampleRate, numChannels);
   return URL.createObjectURL(new Blob([wavBuffer], { type: 'audio/wav' }));
 }

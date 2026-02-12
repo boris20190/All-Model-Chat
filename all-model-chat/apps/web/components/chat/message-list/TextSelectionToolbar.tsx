@@ -23,7 +23,6 @@ interface TextSelectionToolbarProps {
 export const TextSelectionToolbar: React.FC<TextSelectionToolbarProps> = ({ onQuote, onInsert, onTTS, containerRef, t }) => {
     const toolbarRef = useRef<HTMLDivElement>(null);
     const [isCopied, setIsCopied] = useState(false);
-    const [ttsError, setTtsError] = useState<string | null>(null);
 
     // 1. Audio Logic
     const audioState = useSelectionAudio();
@@ -77,20 +76,14 @@ export const TextSelectionToolbar: React.FC<TextSelectionToolbarProps> = ({ onQu
         e.preventDefault(); e.stopPropagation();
         if (!onTTS || !selectedText) return;
         
-        setTtsError(null);
-        audioState.clearPlaybackError();
         audioState.setIsLoading(true);
         try {
             const url = await onTTS(selectedText);
             if (url) {
                 audioState.play(url);
-                return;
             }
-            setTtsError('No audio was generated for this selection.');
         } catch (err) {
             console.error("TTS Failed:", err);
-            const message = err instanceof Error ? err.message : 'Failed to generate TTS audio.';
-            setTtsError(message);
         } finally {
             audioState.setIsLoading(false);
         }
@@ -99,7 +92,6 @@ export const TextSelectionToolbar: React.FC<TextSelectionToolbarProps> = ({ onQu
     const handleCloseAudio = (e: React.MouseEvent) => {
         e.preventDefault(); e.stopPropagation();
         audioState.stop();
-        setTtsError(null);
         clearSelection();
     };
 
@@ -111,30 +103,20 @@ export const TextSelectionToolbar: React.FC<TextSelectionToolbarProps> = ({ onQu
                 <AudioPlayerView 
                     audioUrl={audioState.audioUrl}
                     isLoading={audioState.isLoading}
-                    playbackError={audioState.playbackError}
                     audioRef={audioState.audioRef}
                     onDragStart={handleDragStart}
                     onClose={handleCloseAudio}
-                    onAudioError={audioState.handleAudioPlaybackError}
-                    onAudioPlay={audioState.clearPlaybackError}
                 />
             ) : (
-                <>
-                    <StandardActionsView 
-                        onQuote={handleQuoteClick}
-                        onInsert={onInsert ? handleInsertClick : undefined}
-                        onCopy={handleCopyClick}
-                        onSearch={handleSearchClick}
-                        onTTS={onTTS ? handleTTSClick : undefined}
-                        isCopied={isCopied}
-                        t={t}
-                    />
-                    {ttsError && (
-                        <span className="px-2 py-1 text-[11px] text-red-400 max-w-[420px] truncate" title={ttsError}>
-                            {ttsError}
-                        </span>
-                    )}
-                </>
+                <StandardActionsView 
+                    onQuote={handleQuoteClick}
+                    onInsert={onInsert ? handleInsertClick : undefined}
+                    onCopy={handleCopyClick}
+                    onSearch={handleSearchClick}
+                    onTTS={onTTS ? handleTTSClick : undefined}
+                    isCopied={isCopied}
+                    t={t}
+                />
             )}
         </ToolbarContainer>
     );
