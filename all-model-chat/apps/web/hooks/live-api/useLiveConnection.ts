@@ -101,15 +101,22 @@ export const useLiveConnection = ({
             // Initialize Audio (Mic & Worklet)
             // We pass a callback that sends the encoded audio to the session
             await initializeAudio((pcmData) => {
+                // Guard against send attempts while disconnected to avoid socket flood errors.
+                if (!isConnectedRef.current) return;
+
                 const base64Data = float32ToPCM16Base64(pcmData);
                 if (sessionRef.current) {
                     sessionRef.current.then(session => {
-                        session.sendRealtimeInput({
-                            media: {
-                                mimeType: 'audio/pcm;rate=16000',
-                                data: base64Data
-                            }
-                        });
+                        try {
+                            session.sendRealtimeInput({
+                                media: {
+                                    mimeType: 'audio/pcm;rate=16000',
+                                    data: base64Data
+                                }
+                            });
+                        } catch (e) {
+                            console.warn("Failed to send audio frame:", e);
+                        }
                     });
                 }
             });

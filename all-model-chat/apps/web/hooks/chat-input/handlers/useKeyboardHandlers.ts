@@ -74,8 +74,8 @@ export const useKeyboardHandlers = ({
             }
         }
 
-        // 2. Composition Guard
-        if (isComposingRef.current) return;
+        // 2. Composition Guard (IME-safe)
+        if (isComposingRef.current || e.nativeEvent.isComposing) return;
 
         // 3. Stop / Cancel (Custom Shortcut or default Escape)
         if (isShortcutPressed(e, 'global.stopCancel', appSettings)) {
@@ -127,8 +127,10 @@ export const useKeyboardHandlers = ({
 
         // Priority resolution: if both match (unlikely/bad config), prefer Send?
         if (isSendPressed) {
-            // If on mobile (without desktop override), we might want to respect soft keyboard behavior?
-            // But if user set a shortcut, we should honor it.
+            // On mobile, raw Enter should preserve newline behavior instead of sending.
+            if (isMobile && e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                return;
+            }
             
             // Allow Slash Command execution on Send
             const trimmedInput = inputText.trim();
