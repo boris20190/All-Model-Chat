@@ -42,6 +42,26 @@ const parseOptionalString = (value: unknown): string | undefined => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
+const extractInlineAudioData = (
+  candidates: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string } }> } }> | undefined
+): string | undefined => {
+  if (!Array.isArray(candidates)) return undefined;
+
+  for (const candidate of candidates) {
+    const parts = candidate.content?.parts;
+    if (!Array.isArray(parts)) continue;
+
+    for (const part of parts) {
+      const audioData = part.inlineData?.data;
+      if (typeof audioData === 'string' && audioData.length > 0) {
+        return audioData;
+      }
+    }
+  }
+
+  return undefined;
+};
+
 const parsePartArray = (value: unknown, fieldName: string): Part[] => {
   if (!Array.isArray(value)) {
     throw new RequestValidationError('invalid_request', 400, `\`${fieldName}\` must be an array.`);
@@ -253,7 +273,7 @@ const handleGenerateSpeech = async (
       },
     });
 
-    return result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    return extractInlineAudioData(result.candidates);
   });
 
   if (!audioData) {
