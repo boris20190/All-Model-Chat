@@ -15,7 +15,9 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.github/
+.github/*
+!.github/workflows/
+!.github/workflows/**
 .idea
 .DS_Store
 *.suo
@@ -27,11 +29,17 @@ dist-ssr
 # Generated files
 bundle-stats.html
 stats.html
+*.png
+*.pdf
+*.csv
+*.pkl
+__pycache__/
 
 # Temporary folders
-chat-answer/
-.agent/
-chat/
+/chat-answer/
+/.agent/
+/chat/
+/setup/
 
 # Environment files
 .env
