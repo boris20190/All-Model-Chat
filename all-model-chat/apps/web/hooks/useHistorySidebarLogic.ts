@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { SavedChatSession, ChatGroup } from '../types';
 import { useWindowContext } from '../contexts/WindowContext';
 import { translations } from '../utils/appUtils';
+import { dbService } from '../utils/db';
 
 interface UseHistorySidebarLogicProps {
     isOpen: boolean;
@@ -37,6 +38,7 @@ export const useHistorySidebarLogic = ({
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
     const [newlyTitledSessionId, setNewlyTitledSessionId] = useState<string | null>(null);
+    const [searchResults, setSearchResults] = useState<{ query: string, ids: Set<string> } | null>(null);
     
     const menuRef = useRef<HTMLDivElement>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
@@ -72,14 +74,53 @@ export const useHistorySidebarLogic = ({
         prevGeneratingTitleSessionIdsRef.current = generatingTitleSessionIds;
     }, [generatingTitleSessionIds]);
 
+    // Search Effect - Async Content Search
+    useEffect(() => {
+        const trimmedQuery = searchQuery.trim();
+        if (!trimmedQuery) {
+            setSearchResults(null);
+            return;
+        }
+
+        let cancelled = false;
+        const handler = setTimeout(async () => {
+            try {
+                const ids = await dbService.searchSessions(trimmedQuery);
+                if (cancelled) return;
+                setSearchResults({ query: trimmedQuery, ids: new Set(ids) });
+            } catch (e) {
+                if (cancelled) return;
+                console.error("Search error", e);
+            }
+        }, 300);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(handler);
+        };
+    }, [searchQuery]);
+
     // --- Data Processing (Memoized) ---
 
-    const filteredSessions = useMemo(() => sessions.filter(session => {
-        if (!searchQuery.trim()) return true;
-        const query = searchQuery.toLowerCase();
-        if (session.title.toLowerCase().includes(query)) return true;
-        return session.messages.some(message => message.content.toLowerCase().includes(query));
-    }), [sessions, searchQuery]);
+    const filteredSessions = useMemo(() => {
+        const trimmedQuery = searchQuery.trim();
+        if (!trimmedQuery) return sessions;
+
+        // Use DB results when available and aligned with the latest query.
+        if (searchResults && searchResults.query === trimmedQuery) {
+            return sessions.filter(session => searchResults.ids.has(session.id));
+        }
+
+        // Fallback metadata filter while async DB search is pending.
+        const query = trimmedQuery.toLowerCase();
+        return sessions.filter(session => {
+            if (session.title.toLowerCase().includes(query)) return true;
+            return session.messages.some(message =>
+                message.content.toLowerCase().includes(query) ||
+                (message.thoughts?.toLowerCase().includes(query) ?? false)
+            );
+        });
+    }, [sessions, searchQuery, searchResults]);
 
     const sessionsByGroupId = useMemo(() => {
         const map = new Map<string | null, SavedChatSession[]>();
