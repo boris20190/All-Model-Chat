@@ -44,8 +44,10 @@ export const useChatSessionExport = ({
         if (format === 'png' || format === 'html') {
             if (!scrollContainer) return;
 
-            // Use unified helper to clone, clean, and embed images
-            const chatClone = await prepareElementForExport(scrollContainer);
+            // PNG exports should force visibility; HTML exports keep collapsible sections.
+            const chatClone = await prepareElementForExport(scrollContainer, {
+                expandDetails: format === 'png'
+            });
 
             if (format === 'png') {
                 await generateSnapshotPng(

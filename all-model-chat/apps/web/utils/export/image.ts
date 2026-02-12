@@ -15,7 +15,7 @@ export const exportElementAsPng = async (
 ) => {
     const html2canvas = (await import('html2canvas')).default;
 
-    // Pre-load images to ensure they render
+    // 1. Pre-load images to ensure they render.
     const images = Array.from(element.querySelectorAll('img'));
     await Promise.all(images.map(img => {
         if (img.complete) return Promise.resolve();
@@ -28,29 +28,60 @@ export const exportElementAsPng = async (
     // Force a layout recalc/paint wait to ensure styles are applied in the detached container
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const canvas = await html2canvas(element, {
-        height: element.scrollHeight,
-        width: element.scrollWidth,
-        useCORS: true, // Important for cross-origin images
-        allowTaint: true,
-        logging: false,
-        backgroundColor: options?.backgroundColor ?? null,
-        scale: options?.scale ?? 2, // Default to 2x for Retina sharpness
-        ignoreElements: (el) => {
-            // Fallback check for ignoring elements if CSS fails
-            return el.classList.contains('no-export'); 
-        }
-    });
-    
-    // Convert to Blob to handle larger images better than data URI
-    canvas.toBlob((blob) => {
-        if (blob) {
-            const url = URL.createObjectURL(blob);
-            triggerDownload(url, filename);
-        } else {
-            console.error("Canvas to Blob conversion failed");
-        }
-    }, 'image/png');
+    // 2. Smart scale guardrails to avoid browser canvas limits.
+    const MAX_CANVAS_HEIGHT = 30000;
+    const MAX_CANVAS_AREA = 100 * 1000 * 1000;
+
+    const width = element.scrollWidth;
+    const height = element.scrollHeight;
+    let targetScale = options?.scale ?? 2;
+
+    if ((height * targetScale) > MAX_CANVAS_HEIGHT) {
+        targetScale = MAX_CANVAS_HEIGHT / height;
+        console.warn(`[Export] Content too tall, reducing scale to ${targetScale.toFixed(2)}`);
+    }
+
+    if ((width * targetScale) * (height * targetScale) > MAX_CANVAS_AREA) {
+        const areaRatio = MAX_CANVAS_AREA / (width * height);
+        targetScale = Math.min(targetScale, Math.sqrt(areaRatio));
+        console.warn(`[Export] Area too large, reducing scale to ${targetScale.toFixed(2)}`);
+    }
+
+    targetScale = Math.max(targetScale, 0.5);
+
+    try {
+        const canvas = await html2canvas(element, {
+            height,
+            width,
+            useCORS: true,
+            allowTaint: false,
+            logging: false,
+            backgroundColor: options?.backgroundColor ?? null,
+            scale: targetScale,
+            ignoreElements: (el) => el.classList.contains('no-export'),
+            imageTimeout: 15000,
+            onclone: (clonedDoc) => {
+                const clonedElement = clonedDoc.querySelector('.is-exporting-png') as HTMLElement | null;
+                if (clonedElement) {
+                    clonedElement.style.transform = 'none';
+                    clonedElement.style.maxHeight = 'none';
+                }
+            }
+        });
+        
+        canvas.toBlob((blob) => {
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                triggerDownload(url, filename);
+            } else {
+                console.error('Canvas to Blob conversion failed (result is null). The content may be too large.');
+                alert('Export failed: The image is too large for the browser. Try HTML or TXT export.');
+            }
+        }, 'image/png');
+    } catch (error) {
+        console.error('html2canvas error:', error);
+        alert(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
 };
 
 /**

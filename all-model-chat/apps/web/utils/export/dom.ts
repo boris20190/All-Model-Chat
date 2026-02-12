@@ -5,24 +5,33 @@
  */
 export const gatherPageStyles = async (): Promise<string> => {
     const stylePromises = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map(el => {
+        .map(async el => {
             if (el.tagName === 'STYLE') {
-                return Promise.resolve(`<style>${el.innerHTML}</style>`);
+                return `<style>${el.innerHTML}</style>`;
             }
             if (el.tagName === 'LINK' && (el as HTMLLinkElement).rel === 'stylesheet') {
-                // Fetch external stylesheets to inline them
-                return fetch((el as HTMLLinkElement).href)
-                    .then(res => {
-                        if (!res.ok) throw new Error(`Failed to fetch stylesheet: ${res.statusText}`);
-                        return res.text();
-                    })
-                    .then(css => `<style>${css}</style>`)
-                    .catch(err => {
-                        console.warn('Could not fetch stylesheet for export:', (el as HTMLLinkElement).href, err);
-                        return el.outerHTML; // Fallback to linking the stylesheet
-                    });
+                const href = (el as HTMLLinkElement).href;
+                
+                try {
+                    const res = await fetch(href);
+                    if (!res.ok) throw new Error(res.statusText);
+
+                    // Guard against inlining non-CSS payloads (e.g. HTML error pages).
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && !contentType.includes('text/css') && !contentType.includes('application/octet-stream')) {
+                        console.warn(`Skipping stylesheet ${href} due to invalid MIME: ${contentType}`);
+                        return '';
+                    }
+
+                    const css = await res.text();
+                    return `<style>${css}</style>`;
+                } catch (err) {
+                    console.warn('Could not fetch stylesheet for export:', href, err);
+                    // Ignore failed external styles to avoid tainted/cross-origin export failures.
+                    return '';
+                }
             }
-            return Promise.resolve('');
+            return '';
         });
 
     return (await Promise.all(stylePromises)).join('\n');
@@ -153,13 +162,29 @@ export const createExportDOMHeader = (title: string, metaLeft: string, metaRight
 
 /**
  * Clones, cleans, and prepares a DOM element for export (HTML or PNG).
- * Handles removing interactive elements, expanding content, and embedding images.
+ * Handles removing interactive elements, expanding content, embedding images,
+ * and normalizing layout artifacts from virtualization.
  */
-export const prepareElementForExport = async (sourceElement: HTMLElement): Promise<HTMLElement> => {
+export const prepareElementForExport = async (sourceElement: HTMLElement, options: { expandDetails?: boolean } = {}): Promise<HTMLElement> => {
+    const { expandDetails = true } = options;
+
     // 1. Clone the container
     const clone = sourceElement.cloneNode(true) as HTMLElement;
 
-    // 2. Clean UI elements that shouldn't be in the export
+    // 2. Fix layout artifacts from virtualized containers.
+    clone.style.height = 'auto';
+    clone.style.overflow = 'visible';
+    clone.style.maxHeight = 'none';
+
+    const potentialLists = Array.from(clone.children) as HTMLElement[];
+    potentialLists.forEach(child => {
+        if (child.style.paddingTop) child.style.paddingTop = '0px';
+        if (child.style.marginTop) child.style.marginTop = '0px';
+        if (child.style.transform) child.style.transform = 'none';
+        if (child.style.position === 'absolute') child.style.position = 'static';
+    });
+
+    // 3. Clean UI elements that shouldn't be in the export
     const selectorsToRemove = [
         'button', 
         '.message-actions', 
@@ -172,17 +197,73 @@ export const prepareElementForExport = async (sourceElement: HTMLElement): Promi
     ];
     clone.querySelectorAll(selectorsToRemove.join(',')).forEach(el => el.remove());
     
-    // 3. Reset styles that might interfere with static export
+    // 4. Reset styles that might interfere with static export
     clone.querySelectorAll('[data-message-id]').forEach(el => {
         (el as HTMLElement).style.animation = 'none';
         (el as HTMLElement).style.opacity = '1';
         (el as HTMLElement).style.transform = 'none';
     });
 
-    // 4. Expand all details elements (thoughts/groups) so they are visible
-    clone.querySelectorAll('details').forEach(el => el.setAttribute('open', 'true'));
+    if (expandDetails) {
+        // PNG export: maximize visibility for static capture.
+        clone.querySelectorAll('.message-thoughts-block').forEach(el => el.remove());
+        clone.querySelectorAll('.code-block-expand-overlay').forEach(el => el.remove());
 
-    // 5. Embed Images: Convert blob/url images to Base64
+        clone.querySelectorAll('pre').forEach(el => {
+            (el as HTMLElement).style.maxHeight = 'none';
+            (el as HTMLElement).style.height = 'auto';
+            (el as HTMLElement).style.overflow = 'visible';
+        });
+
+        clone.querySelectorAll('details').forEach(el => el.setAttribute('open', 'true'));
+    } else {
+        // HTML export: keep sections collapsed by default but interactive.
+        clone.querySelectorAll('details').forEach(el => el.removeAttribute('open'));
+
+        clone.querySelectorAll('.thought-process-accordion').forEach(accordion => {
+            const parent = accordion.parentElement;
+            if (!parent) return;
+
+            const header = parent.firstElementChild as HTMLElement;
+            if (!header || header === accordion) return;
+
+            const details = document.createElement('details');
+            details.className = parent.className;
+
+            const summary = document.createElement('summary');
+            summary.className = header.className;
+            summary.style.cursor = 'pointer';
+            summary.style.listStyle = 'none';
+
+            const style = document.createElement('style');
+            style.textContent = 'summary::-webkit-details-marker { display: none; }';
+            summary.appendChild(style);
+
+            while (header.firstChild) {
+                summary.appendChild(header.firstChild);
+            }
+
+            const svg = summary.querySelector('svg');
+            if (svg && svg.classList.contains('transition-transform')) {
+                svg.classList.remove('rotate-180');
+                svg.classList.add('group-open:rotate-180');
+            }
+
+            const inner = accordion.querySelector('.thought-process-inner') || accordion;
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = (inner as HTMLElement).className;
+
+            while (inner.firstChild) {
+                contentWrapper.appendChild(inner.firstChild);
+            }
+
+            details.appendChild(summary);
+            details.appendChild(contentWrapper);
+            parent.replaceWith(details);
+        });
+    }
+
+    // 5. Embed images by converting URL/blob sources to data URLs.
     await embedImagesInClone(clone);
 
     return clone;

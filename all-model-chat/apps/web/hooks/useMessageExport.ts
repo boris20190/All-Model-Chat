@@ -59,17 +59,21 @@ export const useMessageExport = ({ message, sessionTitle, messageIndex, themeId 
             const messageWrapper = document.querySelector(`[data-message-id="${message.id}"]`);
             // We want the inner bubble, usually inside the wrapper. 
             // The structure is Wrapper -> Container -> [Actions, Bubble, Actions]
-            // The Bubble has class "shadow-sm" (user) or just text (model).
-            // A safer bet is grabbing the container that holds the content.
-            const contentNodeSource = messageWrapper?.querySelector('.markdown-body') || messageWrapper?.querySelector('.shadow-sm');
+            // Prioritize explicit message content container and keep fallbacks.
+            const contentNodeSource =
+                messageWrapper?.querySelector('.message-content-container')
+                || messageWrapper?.querySelector('.markdown-body')
+                || messageWrapper?.querySelector('.shadow-sm');
 
             if (type === 'png' || type === 'html') {
                 if (!contentNodeSource) {
                     throw new Error("Could not find message content in DOM. Please ensure the message is visible.");
                 }
 
-                // Use unified helper to clone, clean, and embed images
-                const cleanedContent = await prepareElementForExport(contentNodeSource as HTMLElement);
+                // PNG exports should expand details for static readability; HTML keeps collapsible behavior.
+                const cleanedContent = await prepareElementForExport(contentNodeSource as HTMLElement, {
+                    expandDetails: type === 'png'
+                });
 
                 if (type === 'png') {
                     await generateSnapshotPng(

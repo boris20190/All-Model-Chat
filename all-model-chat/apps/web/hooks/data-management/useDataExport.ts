@@ -4,6 +4,7 @@ import { AppSettings, SavedChatSession, SavedScenario, ChatGroup } from '../../t
 import { logService, sanitizeSessionForExport } from '../../utils/appUtils';
 import { triggerDownload } from '../../utils/exportUtils';
 import { sanitizeAppSettingsForStorage } from '../../utils/security/sensitiveData';
+import { dbService } from '../../utils/db';
 
 interface UseDataExportProps {
     appSettings: AppSettings;
@@ -39,11 +40,15 @@ export const useDataExport = ({
         }
     }, [appSettings, t]);
 
-    const handleExportHistory = useCallback(() => {
+    const handleExportHistory = useCallback(async () => {
         logService.info(`Exporting chat history.`);
         try {
-            // Sanitize all sessions before export to remove rawFile/Blobs/AbortControllers
-            const sanitizedSessions = savedSessions.map(sanitizeSessionForExport);
+            // Read full sessions from DB because in-memory list may contain metadata only.
+            const fullSessions = await dbService.getAllSessions();
+            const sessionsForExport = fullSessions.length > 0 ? fullSessions : savedSessions;
+
+            // Sanitize all sessions before export to remove rawFile/Blobs/AbortControllers.
+            const sanitizedSessions = sessionsForExport.map(sanitizeSessionForExport);
             
             const dataToExport = { type: 'AllModelChat-History', version: 1, history: sanitizedSessions, groups: savedGroups };
             const jsonString = JSON.stringify(dataToExport, null, 2);
