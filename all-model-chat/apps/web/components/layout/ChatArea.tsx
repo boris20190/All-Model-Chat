@@ -118,6 +118,7 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
         chatInputHeight={chatInputHeight}
         appSettings={appSettings}
         currentModelId={currentChatSettings.modelId} 
+        activeSessionId={activeSessionId}
         onOpenSidePanel={onOpenSidePanel}
         onUpdateMessageFile={onUpdateMessageFile}
         onQuote={handleQuote}
