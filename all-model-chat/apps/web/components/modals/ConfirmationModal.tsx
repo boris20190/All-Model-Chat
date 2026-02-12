@@ -7,6 +7,7 @@ interface ConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  onCancel?: () => void;
   title: string;
   message: string;
   confirmLabel?: string;
@@ -18,6 +19,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   isOpen,
   onClose,
   onConfirm,
+  onCancel,
   title,
   message,
   confirmLabel = 'Confirm',
@@ -26,6 +28,11 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 }) => {
   const handleConfirm = () => {
     onConfirm();
+    onClose();
+  };
+
+  const handleCancel = () => {
+    onCancel?.();
     onClose();
   };
 
@@ -53,7 +60,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
         <div className="flex justify-end gap-3 mt-2">
           <button
-            onClick={onClose}
+            onClick={handleCancel}
             className="px-4 py-2 text-sm font-medium text-[var(--theme-text-primary)] bg-[var(--theme-bg-input)] border border-[var(--theme-border-secondary)] hover:bg-[var(--theme-bg-tertiary)] rounded-lg transition-colors"
           >
             {cancelLabel}

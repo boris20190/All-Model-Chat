@@ -73,8 +73,10 @@ export const useSettingsLogic = ({
         title: string;
         message: string;
         onConfirm: () => void;
+        onCancel?: () => void;
         isDanger?: boolean;
         confirmLabel?: string;
+        cancelLabel?: string;
     }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -225,13 +227,18 @@ export const useSettingsLogic = ({
                     savePendingChanges();
                     onClose();
                 },
+                onCancel: () => {
+                    discardPendingChanges();
+                    onClose();
+                },
                 isDanger: false,
-                confirmLabel: t('save') || 'Save'
+                confirmLabel: t('save') || 'Save',
+                cancelLabel: t('settingsDiscardChanges') || 'Discard'
             });
         } else {
             onClose();
         }
-    }, [hasUnsavedChanges, savePendingChanges, onClose, t]);
+    }, [hasUnsavedChanges, savePendingChanges, discardPendingChanges, onClose, t]);
 
     // Handle discard and close
     const handleDiscardAndClose = useCallback(() => {

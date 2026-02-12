@@ -148,12 +148,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <ConfirmationModal
                     isOpen={confirmConfig.isOpen}
                     onClose={closeConfirm}
-                    onConfirm={() => { confirmConfig.onConfirm(); closeConfirm(); }}
+                    onConfirm={confirmConfig.onConfirm}
+                    onCancel={confirmConfig.onCancel}
                     title={confirmConfig.title}
                     message={confirmConfig.message}
                     isDanger={confirmConfig.isDanger}
                     confirmLabel={confirmConfig.confirmLabel}
-                    cancelLabel={t('settingsDiscardChanges') || t('cancel')}
+                    cancelLabel={confirmConfig.cancelLabel || t('cancel')}
                 />
             )}
         </>
