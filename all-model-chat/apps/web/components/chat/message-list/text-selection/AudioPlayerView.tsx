@@ -5,17 +5,25 @@ import { GripVertical, X, Loader2 } from 'lucide-react';
 interface AudioPlayerViewProps {
     audioUrl: string | null;
     isLoading: boolean;
+    playbackError?: string | null;
     audioRef: React.RefObject<HTMLAudioElement>;
     onDragStart: (e: React.MouseEvent) => void;
     onClose: (e: React.MouseEvent) => void;
+    onAudioError?: () => void;
+    onAudioPlay?: () => void;
+    onAudioPause?: () => void;
 }
 
 export const AudioPlayerView: React.FC<AudioPlayerViewProps> = ({ 
     audioUrl, 
     isLoading, 
+    playbackError,
     audioRef, 
     onDragStart, 
-    onClose 
+    onClose,
+    onAudioError,
+    onAudioPlay,
+    onAudioPause,
 }) => {
     if (isLoading) {
         return (
@@ -43,6 +51,9 @@ export const AudioPlayerView: React.FC<AudioPlayerViewProps> = ({
                 src={audioUrl} 
                 controls 
                 autoPlay 
+                onError={onAudioError}
+                onPlay={onAudioPlay}
+                onPause={onAudioPause}
                 className="h-8 w-80 rounded-full focus:outline-none"
             />
             <button 
@@ -51,6 +62,9 @@ export const AudioPlayerView: React.FC<AudioPlayerViewProps> = ({
             >
                 <X size={16} />
             </button>
+            {playbackError && (
+                <span className="ml-1 text-[11px] text-red-400 whitespace-nowrap">{playbackError}</span>
+            )}
         </div>
     );
 };
