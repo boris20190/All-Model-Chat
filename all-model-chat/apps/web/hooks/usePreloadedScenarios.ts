@@ -10,6 +10,7 @@ import {
     pyriteScenario, 
     annaScenario, 
     voxelScenario, 
+    cyberpunkAdventureScenario,
     reasonerScenario, 
     succinctScenario, 
     socraticScenario, 
@@ -35,33 +36,20 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
                 const storedScenarios = await dbService.getAllScenarios();
                 let scenariosToSet = storedScenarios;
 
-                // 2. Seed Jailbreak Scenarios (FOP, Pyrite, Unrestricted) as User Scenarios
-                const hasSeededJailbreaks = localStorage.getItem('hasSeededJailbreaks_v1');
-                if (!hasSeededJailbreaks) {
-                    const jailbreaks = [fopScenario, unrestrictedScenario, pyriteScenario];
-                    // Append if not already present by ID
-                    const newScenarios = jailbreaks.filter(jb => !scenariosToSet.some(s => s.id === jb.id));
-                    if (newScenarios.length > 0) {
-                        scenariosToSet = [...scenariosToSet, ...newScenarios];
-                    }
-                }
-
-                // 3. Seed Anna Scenario (v1 check)
-                const hasSeededAnna = localStorage.getItem('hasSeededAnna_v1');
-                if (!hasSeededAnna) {
-                    const anna = [annaScenario];
-                    const newScenarios = anna.filter(a => !scenariosToSet.some(s => s.id === a.id));
-                    if (newScenarios.length > 0) {
-                        scenariosToSet = [...scenariosToSet, ...newScenarios];
-                    }
+                // Keep seeded user scenarios resilient: if any required seed is missing, re-add it.
+                const seedUserScenarios = [fopScenario, unrestrictedScenario, pyriteScenario, annaScenario];
+                const missingSeedScenarios = seedUserScenarios.filter(seed => !scenariosToSet.some(s => s.id === seed.id));
+                if (missingSeedScenarios.length > 0) {
+                    scenariosToSet = [...scenariosToSet, ...missingSeedScenarios];
                 }
 
                 // Save if any changes were made
-                if (!hasSeededJailbreaks || !hasSeededAnna) {
+                if (missingSeedScenarios.length > 0) {
                     await dbService.setAllScenarios(scenariosToSet);
-                    if (!hasSeededJailbreaks) localStorage.setItem('hasSeededJailbreaks_v1', 'true');
-                    if (!hasSeededAnna) localStorage.setItem('hasSeededAnna_v1', 'true');
                 }
+                // Preserve legacy seed markers for backward compatibility.
+                localStorage.setItem('hasSeededJailbreaks_v1', 'true');
+                localStorage.setItem('hasSeededAnna_v1', 'true');
 
                 setUserSavedScenarios(scenariosToSet);
             } catch (error) {
@@ -77,6 +65,7 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
         return [
             // FOP, Unrestricted, Pyrite, Anna are now in filteredUserScenarios
             voxelScenario,
+            cyberpunkAdventureScenario,
             reasonerScenario,
             succinctScenario, 
             socraticScenario, 

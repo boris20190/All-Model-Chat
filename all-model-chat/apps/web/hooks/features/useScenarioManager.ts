@@ -4,10 +4,9 @@ import { SavedScenario } from '../../types';
 import { translations } from '../../utils/appUtils';
 import { generateUniqueId } from '../../utils/appUtils';
 import { triggerDownload, sanitizeFilename } from '../../utils/exportUtils';
+import { SYSTEM_SCENARIO_IDS } from '../../constants/defaultScenarios';
 
 export type ModalView = 'list' | 'editor';
-
-const SYSTEM_SCENARIO_IDS = ['succinct-scenario-default', 'socratic-scenario-default', 'formal-scenario-default', 'reasoner-scenario-default'];
 
 interface UseScenarioManagerProps {
   isOpen: boolean;
