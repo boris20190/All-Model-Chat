@@ -19,7 +19,7 @@ export interface HistorySidebarProps {
   activeSessionId: string | null;
   loadingSessionIds: Set<string>;
   generatingTitleSessionIds: Set<string>;
-  onSelectSession: (sessionId: string) => void;
+  onSelectSession: (sessionId: string) => Promise<void>;
   onNewChat: () => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newTitle: string) => void;

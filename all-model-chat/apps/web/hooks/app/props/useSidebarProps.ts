@@ -22,7 +22,9 @@ export const useSidebarProps = (logic: ReturnType<typeof useAppLogic>) => {
     activeSessionId: chatState.activeSessionId,
     loadingSessionIds: chatState.loadingSessionIds,
     generatingTitleSessionIds: chatState.generatingTitleSessionIds,
-    onSelectSession: (id: string) => { chatState.loadChatSession(id); },
+    onSelectSession: async (id: string) => {
+      await chatState.loadChatSession(id);
+    },
     onNewChat: () => chatState.startNewChat(),
     onDeleteSession: chatState.handleDeleteChatHistorySession,
     onRenameSession: chatState.handleRenameSession,

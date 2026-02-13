@@ -16,7 +16,7 @@ interface SessionItemProps {
   newlyTitledSessionId: string | null;
   editInputRef: React.RefObject<HTMLInputElement>;
   menuRef: React.RefObject<HTMLDivElement>;
-  onSelectSession: (sessionId: string) => void;
+  onSelectSession: (sessionId: string) => Promise<void>;
   onTogglePinSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onDuplicateSession: (sessionId: string) => void;
@@ -42,6 +42,16 @@ export const SessionItem: React.FC<SessionItemProps> = (props) => {
 
   const [isRightClickAnimating, setIsRightClickAnimating] = useState(false);
   const isActive = activeMenu === session.id;
+  const handleExport = async () => {
+    try {
+      await onSelectSession(session.id);
+      onOpenExportModal();
+    } catch (error) {
+      console.error('Failed to load session before export', error);
+    } finally {
+      setActiveMenu(null);
+    }
+  };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -61,7 +71,7 @@ export const SessionItem: React.FC<SessionItemProps> = (props) => {
         {editingItem?.type === 'session' && editingItem.id === session.id ? (
           <input ref={editInputRef} type="text" value={editingItem.title} onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })} onBlur={handleRenameConfirm} onKeyDown={handleRenameKeyDown} className="flex-grow bg-transparent border border-[var(--theme-border-focus)] rounded-md px-1 py-0 text-sm w-full" />
         ) : (
-          <button onClick={() => onSelectSession(session.id)} className="flex items-center flex-grow min-w-0" aria-current={session.id === activeSessionId ? "page" : undefined}>
+          <button onClick={() => { void onSelectSession(session.id); }} className="flex items-center flex-grow min-w-0" aria-current={session.id === activeSessionId ? "page" : undefined}>
             {session.isPinned && <Pin size={12} className="mr-2 text-[var(--theme-text-link)] flex-shrink-0" strokeWidth={2} />}
             <span className="font-medium truncate" title={session.title}>
               {generatingTitleSessionIds.has(session.id) ? (
@@ -83,7 +93,7 @@ export const SessionItem: React.FC<SessionItemProps> = (props) => {
           onStartEdit={() => { handleStartEdit(session); setActiveMenu(null); }}
           onTogglePin={() => { onTogglePinSession(session.id); setActiveMenu(null); }}
           onDuplicate={() => { onDuplicateSession(session.id); setActiveMenu(null); }}
-          onExport={() => { onSelectSession(session.id); onOpenExportModal(); setActiveMenu(null); }}
+          onExport={handleExport}
           onDelete={() => { onDeleteSession(session.id); setActiveMenu(null); }}
           t={t}
         />

@@ -14,7 +14,7 @@ interface UseHistorySidebarLogicProps {
     onRenameSession: (sessionId: string, newTitle: string) => void;
     onRenameGroup: (groupId: string, newTitle: string) => void;
     onMoveSessionToGroup: (sessionId: string, groupId: string | null) => void;
-    onSelectSession: (sessionId: string) => void;
+    onSelectSession: (sessionId: string) => Promise<void>;
     t: (key: keyof typeof translations, fallback?: string) => string;
     language: 'en' | 'zh';
 }
@@ -264,7 +264,7 @@ export const useHistorySidebarLogic = ({
     };
 
     const handleSessionSelect = (sessionId: string) => {
-        onSelectSession(sessionId);
+        void onSelectSession(sessionId);
         // Auto-close sidebar on mobile
         if (window.innerWidth < 768) {
             onToggle();
