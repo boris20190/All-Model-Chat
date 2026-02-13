@@ -61,7 +61,14 @@ export const useAppLogic = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting'>('idle');
   
-  const activeChat = chatState.savedSessions.find(s => s.id === chatState.activeSessionId);
+  const activeChatMetadata = useMemo(
+    () => chatState.savedSessions.find(s => s.id === chatState.activeSessionId),
+    [chatState.savedSessions, chatState.activeSessionId]
+  );
+  const activeChat = useMemo(
+    () => activeChatMetadata ? { ...activeChatMetadata, messages: chatState.messages } : undefined,
+    [activeChatMetadata, chatState.messages]
+  );
   const sessionTitle = activeChat?.title || t('newChat');
 
   // 5. Title & Timer Logic
@@ -91,7 +98,10 @@ export const useAppLogic = () => {
   });
 
   const handleExportChat = useCallback(async (format: 'png' | 'html' | 'txt' | 'json') => {
-    if (!activeChat) return;
+    if (!activeChat || activeChat.messages.length === 0) {
+      alert(t('chat_is_empty', 'Chat is empty'));
+      return;
+    }
     setExportStatus('exporting');
     try {
       await dataManagement.exportChatLogic(format);
@@ -102,7 +112,7 @@ export const useAppLogic = () => {
         setExportStatus('idle');
         setIsExportModalOpen(false);
     }
-  }, [activeChat, dataManagement]);
+  }, [activeChat, dataManagement, t]);
 
   // 7. Core Handlers
   const {
