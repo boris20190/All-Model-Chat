@@ -141,3 +141,13 @@ export interface FileUploadResponse<TFile = unknown> {
 export interface FileMetadataResponse<TFile = unknown> {
   file: TFile | null;
 }
+
+export interface FileListResponse<TFile = unknown> {
+  files: TFile[];
+  nextPageToken?: string;
+}
+
+export interface FileDeleteResponse {
+  ok: boolean;
+  name: string;
+}

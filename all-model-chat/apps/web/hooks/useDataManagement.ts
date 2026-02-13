@@ -4,6 +4,7 @@ import { AppSettings, SavedChatSession, SavedScenario, ChatGroup, Theme } from '
 import { useDataExport } from './data-management/useDataExport';
 import { useDataImport } from './data-management/useDataImport';
 import { useChatSessionExport } from './data-management/useChatSessionExport';
+import { useFileOverview } from './data-management/useFileOverview';
 
 type SessionsUpdater = (updater: (prev: SavedChatSession[]) => SavedChatSession[]) => void;
 type GroupsUpdater = (updater: (prev: ChatGroup[]) => ChatGroup[]) => void;
@@ -22,9 +23,16 @@ interface DataManagementProps {
     scrollContainerRef: React.RefObject<HTMLDivElement>;
     currentTheme: Theme;
     language: 'en' | 'zh';
+    handleAddFileById?: (fileApiName: string) => Promise<void>;
+    handleProcessAndAddFiles?: (files: FileList | File[]) => Promise<void>;
 }
 
 export const useDataManagement = (props: DataManagementProps) => {
+    const fileOverview = useFileOverview({
+        appSettings: props.appSettings,
+        onAddFileById: props.handleAddFileById,
+    });
+
     const {
         handleExportSettings,
         handleExportHistory,
@@ -58,6 +66,8 @@ export const useDataManagement = (props: DataManagementProps) => {
     });
 
     return {
+        fileOverview,
+        handleProcessAndAddFiles: props.handleProcessAndAddFiles,
         handleExportSettings,
         handleExportHistory,
         handleExportAllScenarios,

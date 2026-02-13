@@ -7,6 +7,7 @@ import { ExportChatModal } from './ExportChatModal';
 import { AVAILABLE_THEMES } from '../../constants/themeConstants';
 import { AppSettings, ModelOption, ChatSettings, SavedScenario } from '../../types';
 import { translations } from '../../utils/appUtils';
+import type { UseFileOverviewState } from '../../hooks/data-management/useFileOverview';
 
 export interface AppModalsProps {
   isSettingsModalOpen: boolean;
@@ -26,6 +27,8 @@ export interface AppModalsProps {
   handleExportHistory: () => void;
   handleImportAllScenarios: (file: File) => void;
   handleExportAllScenarios: () => void;
+  fileOverview: UseFileOverviewState;
+  handleProcessAndAddFiles?: (files: FileList | File[]) => Promise<void>;
 
   isPreloadedMessagesModalOpen: boolean;
   setIsPreloadedMessagesModalOpen: (isOpen: boolean) => void;
@@ -55,6 +58,7 @@ export const AppModals: React.FC<AppModalsProps> = (props) => {
         handleImportSettings, handleExportSettings,
         handleImportHistory, handleExportHistory,
         handleImportAllScenarios, handleExportAllScenarios,
+        fileOverview, handleProcessAndAddFiles,
         isPreloadedMessagesModalOpen, setIsPreloadedMessagesModalOpen, savedScenarios,
         handleSaveAllScenarios, handleLoadPreloadedScenario,
         isExportModalOpen, setIsExportModalOpen, handleExportChat, exportStatus,
@@ -91,6 +95,8 @@ export const AppModals: React.FC<AppModalsProps> = (props) => {
               onExportHistory={handleExportHistory}
               onImportScenarios={handleImportAllScenarios}
               onExportScenarios={handleExportAllScenarios}
+              fileOverview={fileOverview}
+              onUploadFilesToCurrentChat={handleProcessAndAddFiles}
               t={t}
               setAvailableModels={setAvailableModels}
             />

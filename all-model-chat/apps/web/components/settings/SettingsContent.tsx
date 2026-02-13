@@ -10,6 +10,7 @@ import { DataManagementSection } from './sections/DataManagementSection';
 import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AboutSection } from './sections/AboutSection';
 import { Save, X } from 'lucide-react';
+import type { UseFileOverviewState } from '../../hooks/data-management/useFileOverview';
 
 interface SettingsContentProps {
     activeTab: SettingsTab;
@@ -34,6 +35,8 @@ interface SettingsContentProps {
     onExportHistory: () => void;
     onImportScenarios: (file: File) => void;
     onExportScenarios: () => void;
+    fileOverview: UseFileOverviewState;
+    onUploadFilesToCurrentChat?: (files: FileList | File[]) => Promise<void>;
 
     // Pending state handlers
     hasUnsavedChanges: boolean;
@@ -65,6 +68,8 @@ export const SettingsContent: React.FC<SettingsContentProps> = ({
     onExportHistory,
     onImportScenarios,
     onExportScenarios,
+    fileOverview,
+    onUploadFilesToCurrentChat,
     hasUnsavedChanges,
     onSave,
     onDiscard,
@@ -177,6 +182,8 @@ export const SettingsContent: React.FC<SettingsContentProps> = ({
                         onExportHistory={onExportHistory}
                         onImportScenarios={onImportScenarios}
                         onExportScenarios={onExportScenarios}
+                        fileOverview={fileOverview}
+                        onUploadFilesToCurrentChat={onUploadFilesToCurrentChat}
                         onReset={onReset}
                         t={t}
                     />

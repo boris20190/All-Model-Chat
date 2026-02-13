@@ -8,6 +8,7 @@ import { ConfirmationModal } from '../modals/ConfirmationModal';
 import { useSettingsLogic } from '../../hooks/features/useSettingsLogic';
 import { SettingsSidebar } from './SettingsSidebar';
 import { SettingsContent } from './SettingsContent';
+import type { UseFileOverviewState } from '../../hooks/data-management/useFileOverview';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -27,6 +28,8 @@ interface SettingsModalProps {
     onExportHistory: () => void;
     onImportScenarios: (file: File) => void;
     onExportScenarios: () => void;
+    fileOverview: UseFileOverviewState;
+    onUploadFilesToCurrentChat?: (files: FileList | File[]) => Promise<void>;
     t: (key: keyof typeof translations) => string;
     setAvailableModels: (models: ModelOption[]) => void;
 }
@@ -38,6 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onImportSettings, onExportSettings,
     onImportHistory, onExportHistory,
     onImportScenarios, onExportScenarios,
+    fileOverview, onUploadFilesToCurrentChat,
     setAvailableModels
 }) => {
 
@@ -134,6 +138,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             onExportHistory={onExportHistory}
                             onImportScenarios={onImportScenarios}
                             onExportScenarios={onExportScenarios}
+                            fileOverview={fileOverview}
+                            onUploadFilesToCurrentChat={onUploadFilesToCurrentChat}
                             hasUnsavedChanges={hasUnsavedChanges}
                             onSave={savePendingChanges}
                             onDiscard={discardPendingChanges}

@@ -87,6 +87,8 @@ export const useAppLogic = () => {
     scrollContainerRef: chatState.scrollContainerRef, 
     currentTheme, 
     language,
+    handleAddFileById: chatState.handleAddFileById,
+    handleProcessAndAddFiles: chatState.handleProcessAndAddFiles,
   });
 
   const handleExportChat = useCallback(async (format: 'png' | 'html' | 'txt' | 'json') => {
