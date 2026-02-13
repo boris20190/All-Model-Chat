@@ -60,7 +60,6 @@ export const useAppModalsProps = (logic: ReturnType<typeof useAppLogic>) => {
     handleImportAllScenarios: dataManagement.handleImportAllScenarios,
     handleExportAllScenarios: dataManagement.handleExportAllScenarios,
     fileOverview: dataManagement.fileOverview,
-    handleProcessAndAddFiles: dataManagement.handleProcessAndAddFiles,
     isPreloadedMessagesModalOpen: uiState.isPreloadedMessagesModalOpen,
     setIsPreloadedMessagesModalOpen: uiState.setIsPreloadedMessagesModalOpen,
     savedScenarios: chatState.savedScenarios,

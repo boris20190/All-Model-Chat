@@ -28,7 +28,6 @@ export interface AppModalsProps {
   handleImportAllScenarios: (file: File) => void;
   handleExportAllScenarios: () => void;
   fileOverview: UseFileOverviewState;
-  handleProcessAndAddFiles?: (files: FileList | File[]) => Promise<void>;
 
   isPreloadedMessagesModalOpen: boolean;
   setIsPreloadedMessagesModalOpen: (isOpen: boolean) => void;
@@ -58,7 +57,7 @@ export const AppModals: React.FC<AppModalsProps> = (props) => {
         handleImportSettings, handleExportSettings,
         handleImportHistory, handleExportHistory,
         handleImportAllScenarios, handleExportAllScenarios,
-        fileOverview, handleProcessAndAddFiles,
+        fileOverview,
         isPreloadedMessagesModalOpen, setIsPreloadedMessagesModalOpen, savedScenarios,
         handleSaveAllScenarios, handleLoadPreloadedScenario,
         isExportModalOpen, setIsExportModalOpen, handleExportChat, exportStatus,
@@ -96,7 +95,6 @@ export const AppModals: React.FC<AppModalsProps> = (props) => {
               onImportScenarios={handleImportAllScenarios}
               onExportScenarios={handleExportAllScenarios}
               fileOverview={fileOverview}
-              onUploadFilesToCurrentChat={handleProcessAndAddFiles}
               t={t}
               setAvailableModels={setAvailableModels}
             />

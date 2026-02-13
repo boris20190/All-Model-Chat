@@ -36,7 +36,6 @@ interface SettingsContentProps {
     onImportScenarios: (file: File) => void;
     onExportScenarios: () => void;
     fileOverview: UseFileOverviewState;
-    onUploadFilesToCurrentChat?: (files: FileList | File[]) => Promise<void>;
 
     // Pending state handlers
     hasUnsavedChanges: boolean;
@@ -69,7 +68,6 @@ export const SettingsContent: React.FC<SettingsContentProps> = ({
     onImportScenarios,
     onExportScenarios,
     fileOverview,
-    onUploadFilesToCurrentChat,
     hasUnsavedChanges,
     onSave,
     onDiscard,
@@ -183,7 +181,6 @@ export const SettingsContent: React.FC<SettingsContentProps> = ({
                         onImportScenarios={onImportScenarios}
                         onExportScenarios={onExportScenarios}
                         fileOverview={fileOverview}
-                        onUploadFilesToCurrentChat={onUploadFilesToCurrentChat}
                         onReset={onReset}
                         t={t}
                     />

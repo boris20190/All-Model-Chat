@@ -18,7 +18,6 @@ interface DataManagementSectionProps {
   onImportScenarios: (file: File) => void;
   onExportScenarios: () => void;
   fileOverview: UseFileOverviewState;
-  onUploadFilesToCurrentChat?: (files: FileList | File[]) => Promise<void>;
   onReset: () => void;
   t: (key: keyof typeof translations) => string;
 }
@@ -69,7 +68,6 @@ export const DataManagementSection: React.FC<DataManagementSectionProps> = ({
   onImportScenarios,
   onExportScenarios,
   fileOverview,
-  onUploadFilesToCurrentChat,
   onReset,
   t,
 }) => {
@@ -84,6 +82,7 @@ export const DataManagementSection: React.FC<DataManagementSectionProps> = ({
     files,
     isLoading,
     isRefreshing,
+    isUploading,
     error,
     nextPageToken,
     isDeletingByName,
@@ -93,6 +92,7 @@ export const DataManagementSection: React.FC<DataManagementSectionProps> = ({
     canLoadMore,
     refreshFiles,
     loadMoreFiles,
+    uploadFiles,
     deleteRemoteFile,
     copyFileId,
     attachFileById,
@@ -142,8 +142,8 @@ export const DataManagementSection: React.FC<DataManagementSectionProps> = ({
 
   const handleChatUploadSelect = async () => {
     const filesToUpload = chatUploadRef.current?.files;
-    if (!filesToUpload || filesToUpload.length === 0 || !onUploadFilesToCurrentChat) return;
-    await onUploadFilesToCurrentChat(filesToUpload);
+    if (!filesToUpload || filesToUpload.length === 0) return;
+    await uploadFiles(filesToUpload);
     if (chatUploadRef.current) {
       chatUploadRef.current.value = '';
     }
@@ -191,9 +191,9 @@ export const DataManagementSection: React.FC<DataManagementSectionProps> = ({
                 <button
                   onClick={() => chatUploadRef.current?.click()}
                   className={outlineBtnClass}
-                  disabled={!onUploadFilesToCurrentChat}
+                  disabled={isUploading}
                 >
-                  <Upload size={12} strokeWidth={1.5} /> {t('settingsFilesOverviewUpload')}
+                  <Upload size={12} strokeWidth={1.5} /> {isUploading ? t('settingsFilesOverviewUploading') : t('settingsFilesOverviewUpload')}
                 </button>
                 <input
                   type="file"

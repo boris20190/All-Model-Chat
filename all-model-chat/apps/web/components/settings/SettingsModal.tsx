@@ -29,7 +29,6 @@ interface SettingsModalProps {
     onImportScenarios: (file: File) => void;
     onExportScenarios: () => void;
     fileOverview: UseFileOverviewState;
-    onUploadFilesToCurrentChat?: (files: FileList | File[]) => Promise<void>;
     t: (key: keyof typeof translations) => string;
     setAvailableModels: (models: ModelOption[]) => void;
 }
@@ -41,7 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onImportSettings, onExportSettings,
     onImportHistory, onExportHistory,
     onImportScenarios, onExportScenarios,
-    fileOverview, onUploadFilesToCurrentChat,
+    fileOverview,
     setAvailableModels
 }) => {
 
@@ -139,7 +138,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             onImportScenarios={onImportScenarios}
                             onExportScenarios={onExportScenarios}
                             fileOverview={fileOverview}
-                            onUploadFilesToCurrentChat={onUploadFilesToCurrentChat}
                             hasUnsavedChanges={hasUnsavedChanges}
                             onSave={savePendingChanges}
                             onDiscard={discardPendingChanges}

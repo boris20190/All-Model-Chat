@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { File as GeminiFile } from '@google/genai';
 import { AppSettings } from '../../types';
 import { getActiveApiConfig, parseApiKeys } from '../../utils/appUtils';
-import { deleteFileApi, listFilesApi } from '../../services/api/fileApi';
+import { deleteFileApi, listFilesApi, uploadFileApi } from '../../services/api/fileApi';
 import { logService } from '../../services/logService';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -45,6 +45,7 @@ export interface UseFileOverviewState {
   files: GeminiFile[];
   isLoading: boolean;
   isRefreshing: boolean;
+  isUploading: boolean;
   error: string | null;
   nextPageToken: string | null;
   isDeletingByName: Record<string, boolean>;
@@ -55,6 +56,7 @@ export interface UseFileOverviewState {
   canLoadMore: boolean;
   refreshFiles: () => Promise<void>;
   loadMoreFiles: () => Promise<void>;
+  uploadFiles: (files: FileList | File[]) => Promise<boolean>;
   deleteRemoteFile: (name: string) => Promise<boolean>;
   copyFileId: (name: string) => Promise<boolean>;
   attachFileById: (name: string) => Promise<boolean>;
@@ -69,6 +71,7 @@ export const useFileOverview = ({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [isDeletingByName, setIsDeletingByName] = useState<Record<string, boolean>>({});
   const [isAttachingByName, setIsAttachingByName] = useState<Record<string, boolean>>({});
@@ -116,6 +119,44 @@ export const useFileOverview = ({
     if (!nextPageToken) return;
     await requestFilePage({ append: true, pageToken: nextPageToken });
   }, [nextPageToken, requestFilePage]);
+
+  const uploadFiles = useCallback(
+    async (inputFiles: FileList | File[]): Promise<boolean> => {
+      const apiKey = resolveApiKeyForOverview(appSettings);
+      if (!apiKey) {
+        setError('API Key not configured.');
+        return false;
+      }
+
+      const filesToUpload = Array.from(inputFiles);
+      if (filesToUpload.length === 0) {
+        return false;
+      }
+
+      setIsUploading(true);
+      setError(null);
+
+      try {
+        for (const file of filesToUpload) {
+          const mimeType = file.type?.trim() || 'application/octet-stream';
+          const displayName = file.name?.trim() || 'uploaded-file';
+          const controller = new AbortController();
+          await uploadFileApi(apiKey, file, mimeType, displayName, controller.signal);
+        }
+
+        await requestFilePage({ refreshing: true });
+        return true;
+      } catch (uploadError) {
+        const message = toErrorMessage(uploadError);
+        logService.error('Failed to upload files from overview panel.', { error: uploadError });
+        setError(message);
+        return false;
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [appSettings, requestFilePage]
+  );
 
   const deleteRemoteFile = useCallback(
     async (name: string): Promise<boolean> => {
@@ -214,6 +255,7 @@ export const useFileOverview = ({
     files,
     isLoading,
     isRefreshing,
+    isUploading,
     error,
     nextPageToken,
     isDeletingByName,
@@ -224,6 +266,7 @@ export const useFileOverview = ({
     canLoadMore: Boolean(nextPageToken),
     refreshFiles,
     loadMoreFiles,
+    uploadFiles,
     deleteRemoteFile,
     copyFileId,
     attachFileById,

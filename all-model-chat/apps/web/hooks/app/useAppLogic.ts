@@ -88,7 +88,6 @@ export const useAppLogic = () => {
     currentTheme, 
     language,
     handleAddFileById: chatState.handleAddFileById,
-    handleProcessAndAddFiles: chatState.handleProcessAndAddFiles,
   });
 
   const handleExportChat = useCallback(async (format: 'png' | 'html' | 'txt' | 'json') => {

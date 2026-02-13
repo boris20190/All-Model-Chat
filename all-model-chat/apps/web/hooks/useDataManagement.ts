@@ -24,7 +24,6 @@ interface DataManagementProps {
     currentTheme: Theme;
     language: 'en' | 'zh';
     handleAddFileById?: (fileApiName: string) => Promise<void>;
-    handleProcessAndAddFiles?: (files: FileList | File[]) => Promise<void>;
 }
 
 export const useDataManagement = (props: DataManagementProps) => {
@@ -67,7 +66,6 @@ export const useDataManagement = (props: DataManagementProps) => {
 
     return {
         fileOverview,
-        handleProcessAndAddFiles: props.handleProcessAndAddFiles,
         handleExportSettings,
         handleExportHistory,
         handleExportAllScenarios,
