@@ -135,11 +135,24 @@ export const usePreloadedScenarios = ({
 
         const title = scenarioToLoad.title || generateSessionTitle(messages) || 'New Chat';
         
-        const newSession = createNewSession(sessionSettings, messages, title);
+        const isBlankChat = activeChat
+            && activeChat.messages.length === 0
+            && activeChat.settings.systemInstruction === appSettings.systemInstruction;
 
-        setActiveMessages(messages);
-        setActiveSessionId(newSession.id);
-        updateAndPersistSessions(prev => [newSession, ...prev]);
+        if (isBlankChat) {
+            // Reuse the current empty session instead of creating a new one
+            setActiveMessages(messages);
+            updateAndPersistSessions(prev => prev.map(s =>
+                s.id === activeSessionId
+                    ? { ...s, messages, title, settings: sessionSettings, timestamp: Date.now() }
+                    : s
+            ));
+        } else {
+            const newSession = createNewSession(sessionSettings, messages, title);
+            setActiveMessages(messages);
+            setActiveSessionId(newSession.id);
+            updateAndPersistSessions(prev => [newSession, ...prev]);
+        }
 
         setSelectedFiles([]);
         setEditingMessageId(null);
