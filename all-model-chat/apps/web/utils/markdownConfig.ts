@@ -24,7 +24,7 @@ export const getRehypePlugins = (allowHtml: boolean) => {
       'msub', 'msubsup', 'msup', 'mtable', 'mtd', 'mtext', 'mtr',
       'munder', 'munderover', 'semantics', 'annotation', 'annotation-xml',
       'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
-      'details', 'summary'
+      'details', 'summary', 'u', 'mark'
     ],
     attributes: {
       ...defaultSchema.attributes,
@@ -65,9 +65,9 @@ export const getRehypePlugins = (allowHtml: boolean) => {
 };
 
 export const remarkPlugins = [
-  remarkGfm,
+  [remarkGfm, { singleTilde: false }],
   remarkCjkFriendly,
-  remarkCjkFriendlyGfmStrikethrough,
+  [remarkCjkFriendlyGfmStrikethrough, { singleTilde: false }],
   remarkMath,
   remarkBreaks
 ];
