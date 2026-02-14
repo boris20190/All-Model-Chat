@@ -45,10 +45,16 @@ export const useChatState = (appSettings: AppSettings) => {
     // Refs to access latest state inside the heavy updater without adding dependencies
     const activeMessagesRef = useRef<ChatMessage[]>([]);
     const activeSessionIdRef = useRef<string | null>(null);
+    const sessionMessagesCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const hasInitializedActiveSessionSync = useRef(false);
 
     useEffect(() => { activeMessagesRef.current = activeMessages; }, [activeMessages]);
     useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+    useEffect(() => {
+        if (activeSessionId) {
+            sessionMessagesCacheRef.current.set(activeSessionId, activeMessages);
+        }
+    }, [activeSessionId, activeMessages]);
 
     // Sync active session ID to sessionStorage, URL and IndexedDB
     useEffect(() => {
@@ -113,6 +119,7 @@ export const useChatState = (appSettings: AppSettings) => {
                 const fullActiveSession = await dbService.getSession(activeSessionIdRef.current);
                 if (fullActiveSession) {
                     const rehydrated = rehydrateSessionFiles(fullActiveSession);
+                    sessionMessagesCacheRef.current.set(rehydrated.id, rehydrated.messages);
                     setActiveMessages(rehydrated.messages);
                 }
             }
@@ -159,6 +166,7 @@ export const useChatState = (appSettings: AppSettings) => {
                  dbService.getSession(id).then(s => {
                      if (s) {
                          const rehydrated = rehydrateSessionFiles(s);
+                         sessionMessagesCacheRef.current.set(rehydrated.id, rehydrated.messages);
                          setActiveMessages(rehydrated.messages);
                          // Also update metadata list to reflect title/timestamp changes
                          setSavedSessions(prev => prev.map(old => old.id === id ? { ...rehydrated, messages: [] } : old));
@@ -204,12 +212,18 @@ export const useChatState = (appSettings: AppSettings) => {
         setSavedSessions(prevMetadataSessions => {
             const currentActiveId = activeSessionIdRef.current;
             const currentActiveMsgs = activeMessagesRef.current;
+            const sessionMessagesCache = sessionMessagesCacheRef.current;
 
             // 1. Reconstruct "Virtual" Full State
             // Attach current active messages to the matching session in the list so the updater sees full state.
             const virtualFullSessions = prevMetadataSessions.map(s => {
                 if (s.id === currentActiveId) {
+                    if (s.messages === currentActiveMsgs) return s;
                     return { ...s, messages: currentActiveMsgs };
+                }
+                const cachedMessages = sessionMessagesCache.get(s.id);
+                if (cachedMessages && s.messages !== cachedMessages) {
+                    return { ...s, messages: cachedMessages };
                 }
                 return s;
             });
@@ -222,6 +236,24 @@ export const useChatState = (appSettings: AppSettings) => {
                 if (a.isPinned && !b.isPinned) return -1;
                 if (!a.isPinned && b.isPinned) return 1;
                 return b.timestamp - a.timestamp;
+            });
+
+            // Keep a full-message cache for non-active sessions so background updates do not read metadata-only [].
+            const nextSessionIds = new Set(newFullSessions.map(s => s.id));
+            Array.from(sessionMessagesCache.keys()).forEach(id => {
+                if (!nextSessionIds.has(id)) {
+                    sessionMessagesCache.delete(id);
+                }
+            });
+            newFullSessions.forEach(session => {
+                const shouldCacheSession =
+                    session.id === currentActiveId ||
+                    session.messages.length > 0 ||
+                    sessionMessagesCache.has(session.id);
+
+                if (shouldCacheSession) {
+                    sessionMessagesCache.set(session.id, session.messages);
+                }
             });
 
             // 4. Update Active Messages State if changed
@@ -240,13 +272,33 @@ export const useChatState = (appSettings: AppSettings) => {
             if (persist) {
                 const updates: Promise<void>[] = [];
                 const newSessionsMap = new Map(newFullSessions.map(s => [s.id, s]));
+                const prevSessionsMap = new Map(virtualFullSessions.map(s => [s.id, s]));
                 const modifiedSessionIds: string[] = [];
 
                 // Save changed sessions
                 newFullSessions.forEach(session => {
-                    const prevSession = virtualFullSessions.find(ps => ps.id === session.id);
+                    const prevSession = prevSessionsMap.get(session.id);
                     if (prevSession !== session) {
-                        updates.push(dbService.saveSession(sanitizeSessionForStorage(session)));
+                        updates.push((async () => {
+                            let safeSession = session;
+
+                            // Guard: never overwrite a background session with metadata-only empty messages.
+                            if (session.id !== currentActiveId && session.messages.length === 0) {
+                                const cachedMessages = sessionMessagesCache.get(session.id);
+                                if (cachedMessages && cachedMessages.length > 0) {
+                                    safeSession = { ...session, messages: cachedMessages };
+                                } else {
+                                    const dbSession = await dbService.getSession(session.id);
+                                    if (dbSession?.messages?.length) {
+                                        const rehydrated = rehydrateSessionFiles(dbSession);
+                                        safeSession = { ...session, messages: rehydrated.messages };
+                                        sessionMessagesCache.set(session.id, rehydrated.messages);
+                                    }
+                                }
+                            }
+
+                            await dbService.saveSession(sanitizeSessionForStorage(safeSession));
+                        })());
                         modifiedSessionIds.push(session.id);
                     }
                 });

@@ -3,7 +3,7 @@ import React, { Dispatch, SetStateAction, useCallback } from 'react';
 import { AppSettings, SavedChatSession, ChatMessage, ChatSettings as IndividualChatSettings } from '../../types';
 import { Part, UsageMetadata } from '@google/genai';
 import { useApiErrorHandler } from './useApiErrorHandler';
-import { logService, showNotification, calculateTokenStats, playCompletionSound } from '../../utils/appUtils';
+import { logService, showNotification, calculateTokenStats, playCompletionSound, createMessage } from '../../utils/appUtils';
 import { APP_LOGO_SVG_DATA_URI } from '../../constants/appConstants';
 import { finalizeMessages, updateMessagesWithBatch } from '../chat-stream/processors';
 import { streamingStore } from '../../services/streamingStore';
@@ -102,6 +102,23 @@ export const useChatStreamHandler = ({
                     }
                     return msg;
                 });
+
+                const hasTargetMessage = updatedMessages.some(msg => msg.id === generationId);
+                if (!hasTargetMessage) {
+                    logService.warn('Stream completion target message missing; appending fallback model message.', {
+                        sessionId: currentSessionId,
+                        generationId,
+                    });
+                    updatedMessages = [
+                        ...updatedMessages,
+                        createMessage('model', accumulatedText, {
+                            id: generationId,
+                            isLoading: true,
+                            generationStartTime,
+                            thoughts: accumulatedThoughts || undefined,
+                        }),
+                    ];
+                }
                 
                 // 3. Finalize (mark loading false, set stats)
                 const finalizationResult = finalizeMessages(
