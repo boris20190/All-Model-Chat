@@ -6,6 +6,8 @@ import rehypeRaw from 'rehype-raw';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import remarkCjkFriendly from 'remark-cjk-friendly';
+import remarkCjkFriendlyGfmStrikethrough from 'remark-cjk-friendly-gfm-strikethrough';
 
 export const getRehypePlugins = (allowHtml: boolean) => {
   const sanitizeSchema = {
@@ -14,12 +16,12 @@ export const getRehypePlugins = (allowHtml: boolean) => {
       ...(defaultSchema.tagNames || []),
       'div', 'span', 'pre', 'code', 'section', 'header', 'footer', 'nav', 'article', 'aside', 'figure', 'figcaption',
       'svg', 'path', 'defs', 'symbol', 'use', 'g',
-      'math', 'maction', 'maligngroup', 'malignmark', 'menclose', 'merror', 
-      'mfenced', 'mfrac', 'mglyph', 'mi', 'mlabeledtr', 'mlongdiv', 
-      'mmultiscripts', 'mn', 'mo', 'mover', 'mpadded', 'mphantom', 
-      'mroot', 'mrow', 'ms', 'mscarries', 'mscarry', 'msgroup', 
-      'msline', 'mspace', 'msqrt', 'msrow', 'mstack', 'mstyle', 
-      'msub', 'msubsup', 'msup', 'mtable', 'mtd', 'mtext', 'mtr', 
+      'math', 'maction', 'maligngroup', 'malignmark', 'menclose', 'merror',
+      'mfenced', 'mfrac', 'mglyph', 'mi', 'mlabeledtr', 'mlongdiv',
+      'mmultiscripts', 'mn', 'mo', 'mover', 'mpadded', 'mphantom',
+      'mroot', 'mrow', 'ms', 'mscarries', 'mscarry', 'msgroup',
+      'msline', 'mspace', 'msqrt', 'msrow', 'mstack', 'mstyle',
+      'msub', 'msubsup', 'msup', 'mtable', 'mtd', 'mtext', 'mtr',
       'munder', 'munderover', 'semantics', 'annotation', 'annotation-xml',
       'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
       'details', 'summary'
@@ -45,11 +47,11 @@ export const getRehypePlugins = (allowHtml: boolean) => {
       ...defaultSchema.protocols,
       src: ['http', 'https', 'data', 'blob'],
     },
-    clobberPrefix: '', 
+    clobberPrefix: '',
   };
 
   const plugins: any[] = [];
-  
+
   if (allowHtml) {
     plugins.push(rehypeRaw);
   }
@@ -62,4 +64,4 @@ export const getRehypePlugins = (allowHtml: boolean) => {
   return plugins;
 };
 
-export const remarkPlugins = [remarkMath, remarkGfm, remarkBreaks];
+export const remarkPlugins = [remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath, remarkGfm, remarkBreaks];
