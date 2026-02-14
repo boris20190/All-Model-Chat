@@ -64,4 +64,10 @@ export const getRehypePlugins = (allowHtml: boolean) => {
   return plugins;
 };
 
-export const remarkPlugins = [remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath, remarkGfm, remarkBreaks];
+export const remarkPlugins = [
+  remarkGfm,
+  remarkCjkFriendly,
+  remarkCjkFriendlyGfmStrikethrough,
+  remarkMath,
+  remarkBreaks
+];
