@@ -17,6 +17,7 @@ import { MessageListFooter } from './message-list/MessageListFooter';
 
 export interface MessageListProps {
   messages: ChatMessage[];
+  isExportingChat: boolean;
   sessionTitle?: string;
   scrollContainerRef: React.RefObject<HTMLDivElement>;
   setScrollContainerRef: (node: HTMLDivElement | null) => void;
@@ -56,6 +57,7 @@ export interface MessageListProps {
 
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
+  isExportingChat,
   sessionTitle,
   setScrollContainerRef,
   onScrollContainerScroll,
@@ -118,6 +120,37 @@ export const MessageList: React.FC<MessageListProps> = ({
   } = useMessageListScroll({ messages, setScrollContainerRef, activeSessionId });
 
   const isGemini3 = useMemo(() => isGemini3Model(currentModelId), [currentModelId]);
+  const renderMessage = (msg: ChatMessage, index: number) => (
+    <div className="px-1.5 sm:px-2 md:px-3 max-w-7xl mx-auto w-full" key={msg.id}>
+      <Message
+        message={msg}
+        sessionTitle={sessionTitle}
+        prevMessage={index > 0 ? messages[index - 1] : undefined}
+        messageIndex={index}
+        onEditMessage={onEditMessage}
+        onDeleteMessage={onDeleteMessage}
+        onRetryMessage={onRetryMessage}
+        onImageClick={handleFileClick}
+        onOpenHtmlPreview={handleOpenHtmlPreview}
+        showThoughts={showThoughts}
+        themeId={themeId}
+        baseFontSize={baseFontSize}
+        expandCodeBlocksByDefault={expandCodeBlocksByDefault}
+        isMermaidRenderingEnabled={isMermaidRenderingEnabled}
+        isGraphvizRenderingEnabled={isGraphvizRenderingEnabled}
+        onTextToSpeech={onTextToSpeech}
+        onGenerateCanvas={onGenerateCanvas}
+        onContinueGeneration={onContinueGeneration}
+        ttsMessageId={ttsMessageId}
+        onSuggestionClick={onFollowUpSuggestionClick}
+        t={t}
+        appSettings={appSettings}
+        onOpenSidePanel={onOpenSidePanel}
+        onConfigureFile={msg.role === 'user' ? handleConfigureFile : undefined}
+        isGemini3={isGemini3}
+      />
+    </div>
+  );
 
   return (
     <>
@@ -130,6 +163,19 @@ export const MessageList: React.FC<MessageListProps> = ({
             showSuggestions={appSettings.showWelcomeSuggestions ?? true}
             themeId={themeId}
           />
+        ) : isExportingChat ? (
+          <div
+            ref={(node) => {
+              setInternalScrollerRef(node);
+              setScrollContainerRef(node);
+            }}
+            data-export-capture="full"
+            className="custom-scrollbar h-full overflow-y-auto"
+            onScroll={onScrollContainerScroll}
+          >
+            {messages.map(renderMessage)}
+            <MessageListFooter messages={messages} chatInputHeight={chatInputHeight} />
+          </div>
         ) : (
           <Virtuoso
             ref={virtuosoRef}
@@ -144,55 +190,28 @@ export const MessageList: React.FC<MessageListProps> = ({
             components={{
               Footer: () => <MessageListFooter messages={messages} chatInputHeight={chatInputHeight} />,
             }}
-            itemContent={(index, msg) => (
-              <div className="px-1.5 sm:px-2 md:px-3 max-w-7xl mx-auto w-full">
-                <Message
-                  key={msg.id}
-                  message={msg}
-                  sessionTitle={sessionTitle}
-                  prevMessage={index > 0 ? messages[index - 1] : undefined}
-                  messageIndex={index}
-                  onEditMessage={onEditMessage}
-                  onDeleteMessage={onDeleteMessage}
-                  onRetryMessage={onRetryMessage}
-                  onImageClick={handleFileClick}
-                  onOpenHtmlPreview={handleOpenHtmlPreview}
-                  showThoughts={showThoughts}
-                  themeId={themeId}
-                  baseFontSize={baseFontSize}
-                  expandCodeBlocksByDefault={expandCodeBlocksByDefault}
-                  isMermaidRenderingEnabled={isMermaidRenderingEnabled}
-                  isGraphvizRenderingEnabled={isGraphvizRenderingEnabled}
-                  onTextToSpeech={onTextToSpeech}
-                  onGenerateCanvas={onGenerateCanvas}
-                  onContinueGeneration={onContinueGeneration}
-                  ttsMessageId={ttsMessageId}
-                  onSuggestionClick={onFollowUpSuggestionClick}
-                  t={t}
-                  appSettings={appSettings}
-                  onOpenSidePanel={onOpenSidePanel}
-                  onConfigureFile={msg.role === 'user' ? handleConfigureFile : undefined}
-                  isGemini3={isGemini3}
-                />
-              </div>
-            )}
+            itemContent={(index, msg) => renderMessage(msg, index)}
           />
         )}
 
-        <TextSelectionToolbar
-          onQuote={onQuote}
-          onInsert={onInsert}
-          onTTS={onQuickTTS}
-          containerRef={scrollerRef as any}
-          t={t}
-        />
+        {!isExportingChat && (
+          <>
+            <TextSelectionToolbar
+              onQuote={onQuote}
+              onInsert={onInsert}
+              onTTS={onQuickTTS}
+              containerRef={scrollerRef as any}
+              t={t}
+            />
 
-        <ScrollNavigation
-          showUp={showScrollUp}
-          showDown={showScrollDown}
-          onScrollToPrev={scrollToPrevTurn}
-          onScrollToNext={scrollToNextTurn}
-        />
+            <ScrollNavigation
+              showUp={showScrollUp}
+              showDown={showScrollDown}
+              onScrollToPrev={scrollToPrevTurn}
+              onScrollToNext={scrollToNextTurn}
+            />
+          </>
+        )}
       </div>
 
       <FilePreviewModal

@@ -60,6 +60,7 @@ export const useAppLogic = () => {
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting'>('idle');
+  const [isCapturingChatForExport, setIsCapturingChatForExport] = useState(false);
   
   const activeChatMetadata = useMemo(
     () => chatState.savedSessions.find(s => s.id === chatState.activeSessionId),
@@ -102,13 +103,31 @@ export const useAppLogic = () => {
       alert(t('chat_is_empty', 'Chat is empty'));
       return;
     }
+    const requiresDomCapture = format === 'png' || format === 'html';
     setExportStatus('exporting');
+    setIsCapturingChatForExport(requiresDomCapture);
     try {
+      if (requiresDomCapture) {
+        // Wait until the full export container replaces the virtualized scroller.
+        let captureContainerReady = false;
+        for (let i = 0; i < 30; i++) {
+          await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+          const currentScroller = chatState.scrollContainerRef.current;
+          if (currentScroller?.dataset.exportCapture === 'full') {
+            captureContainerReady = true;
+            break;
+          }
+        }
+        if (!captureContainerReady) {
+          throw new Error('Export capture container is not ready.');
+        }
+      }
       await dataManagement.exportChatLogic(format);
     } catch (error) {
         logService.error(`Chat export failed (format: ${format})`, { error });
         alert(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
+        setIsCapturingChatForExport(false);
         setExportStatus('idle');
         setIsExportModalOpen(false);
     }
@@ -137,7 +156,7 @@ export const useAppLogic = () => {
     appSettings, setAppSettings, currentTheme, language, t,
     chatState, uiState, pipState, eventsState, dataManagement,
     sidePanelContent, handleOpenSidePanel, handleCloseSidePanel,
-    isExportModalOpen, setIsExportModalOpen, exportStatus, handleExportChat,
+    isExportModalOpen, setIsExportModalOpen, exportStatus, isCapturingChatForExport, handleExportChat,
     activeChat, sessionTitle,
     handleSaveSettings,
     handleLoadCanvasPromptAndSave,

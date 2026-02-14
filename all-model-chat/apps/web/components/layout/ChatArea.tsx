@@ -22,7 +22,7 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
     onToggleBBox, isBBoxModeActive,
     onToggleGuide, isGuideModeActive,
     isKeyLocked, themeId, modelsLoadingError,
-    messages, scrollContainerRef, setScrollContainerRef, onScrollContainerScroll, onEditMessage,
+    messages, isExportingChat, scrollContainerRef, setScrollContainerRef, onScrollContainerScroll, onEditMessage,
     onDeleteMessage, onRetryMessage, showThoughts, baseFontSize,
     expandCodeBlocksByDefault, isMermaidRenderingEnabled, isGraphvizRenderingEnabled,
     onSuggestionClick, onOrganizeInfoClick, onFollowUpSuggestionClick, onTextToSpeech, onGenerateCanvas, onContinueGeneration, ttsMessageId, onQuickTTS, language, scrollNavVisibility,
@@ -88,6 +88,7 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
 
       <MessageList
         messages={messages}
+        isExportingChat={isExportingChat}
         sessionTitle={sessionTitle}
         scrollContainerRef={scrollContainerRef}
         setScrollContainerRef={setScrollContainerRef}

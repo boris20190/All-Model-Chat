@@ -15,6 +15,7 @@ export const useChatAreaProps = (logic: ReturnType<typeof useAppLogic>) => {
     language,
     t,
     sessionTitle,
+    isCapturingChatForExport,
     handleLoadCanvasPromptAndSave,
     handleToggleBBoxMode,
     handleToggleGuideMode,
@@ -56,6 +57,7 @@ export const useChatAreaProps = (logic: ReturnType<typeof useAppLogic>) => {
     themeId: currentTheme.id,
     modelsLoadingError: null,
     messages: chatState.messages,
+    isExportingChat: isCapturingChatForExport,
     scrollContainerRef: chatState.scrollContainerRef,
     setScrollContainerRef: chatState.setScrollContainerRef,
     onScrollContainerScroll: chatState.onScrollContainerScroll,
@@ -142,7 +144,7 @@ export const useChatAreaProps = (logic: ReturnType<typeof useAppLogic>) => {
     onProjectContextCreated: chatState.handleProjectContextCreated,
     onClearProjectContext: chatState.handleClearProjectContext,
   }), [
-    chatState, uiState, appSettings, currentTheme, language, t, sessionTitle,
+    chatState, uiState, appSettings, currentTheme, language, t, sessionTitle, isCapturingChatForExport,
     pipState, handleLoadCanvasPromptAndSave, handleToggleBBoxMode, handleToggleGuideMode, handleSuggestionClick, handleSetThinkingLevel,
     handleOpenSidePanel, getCurrentModelDisplayName, logic.setAppSettings
   ]);

@@ -45,6 +45,7 @@ export interface ChatAreaProps {
 
   // MessageList Props
   messages: ChatMessage[];
+  isExportingChat: boolean;
   scrollContainerRef: React.RefObject<HTMLDivElement>;
   setScrollContainerRef: (node: HTMLDivElement | null) => void;
   onScrollContainerScroll: () => void;
