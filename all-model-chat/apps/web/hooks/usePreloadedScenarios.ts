@@ -1,6 +1,6 @@
 
-import { useState, useEffect, Dispatch, SetStateAction, useMemo } from 'react';
-import { ChatMessage, SavedScenario, SavedChatSession, AppSettings } from '../types';
+import { useState, useEffect, useMemo, Dispatch, SetStateAction, MutableRefObject } from 'react';
+import { ChatMessage, SavedScenario, SavedChatSession, AppSettings, UploadedFile } from '../types';
 import { generateUniqueId, generateSessionTitle, logService, createNewSession } from '../utils/appUtils';
 import { DEFAULT_CHAT_SETTINGS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants/appConstants';
 import { dbService } from '../utils/db';
@@ -22,12 +22,31 @@ type SessionsUpdater = (updater: (prev: SavedChatSession[]) => SavedChatSession[
 
 interface PreloadedScenariosProps {
     appSettings: AppSettings;
-    setAppSettings: Dispatch<SetStateAction<AppSettings>>;
     updateAndPersistSessions: SessionsUpdater;
+    setActiveMessages: Dispatch<SetStateAction<ChatMessage[]>>;
     setActiveSessionId: Dispatch<SetStateAction<string | null>>;
+    activeChat: SavedChatSession | undefined;
+    activeSessionId: string | null;
+    selectedFiles: UploadedFile[];
+    setSelectedFiles: Dispatch<SetStateAction<UploadedFile[]>>;
+    setEditingMessageId: Dispatch<SetStateAction<string | null>>;
+    fileDraftsRef: MutableRefObject<Record<string, UploadedFile[]>>;
+    userScrolledUp: MutableRefObject<boolean>;
 }
 
-export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPersistSessions, setActiveSessionId }: PreloadedScenariosProps) => {
+export const usePreloadedScenarios = ({
+    appSettings,
+    updateAndPersistSessions,
+    setActiveMessages,
+    setActiveSessionId,
+    activeChat,
+    activeSessionId,
+    selectedFiles,
+    setSelectedFiles,
+    setEditingMessageId,
+    fileDraftsRef,
+    userScrolledUp
+}: PreloadedScenariosProps) => {
     const [userSavedScenarios, setUserSavedScenarios] = useState<SavedScenario[]>([]);
 
     useEffect(() => {
@@ -90,6 +109,12 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
             timestamp: new Date()
         }));
 
+        // Save current files to draft before switching.
+        if (activeSessionId) {
+            fileDraftsRef.current[activeSessionId] = selectedFiles;
+        }
+        userScrolledUp.current = false;
+
         const systemInstruction = scenarioToLoad.systemInstruction ?? DEFAULT_SYSTEM_INSTRUCTION;
 
         // Create a new session from scratch with the scenario's data
@@ -98,23 +123,29 @@ export const usePreloadedScenarios = ({ appSettings, setAppSettings, updateAndPe
             ...appSettings,          // Layer on current app settings
             systemInstruction,       // Override with scenario's system instruction
         };
+        if (activeChat) {
+            sessionSettings.modelId = activeChat.settings.modelId;
+            sessionSettings.thinkingBudget = activeChat.settings.thinkingBudget;
+            sessionSettings.thinkingLevel = activeChat.settings.thinkingLevel;
+            sessionSettings.isGoogleSearchEnabled = activeChat.settings.isGoogleSearchEnabled;
+            sessionSettings.isCodeExecutionEnabled = activeChat.settings.isCodeExecutionEnabled;
+            sessionSettings.isUrlContextEnabled = activeChat.settings.isUrlContextEnabled;
+            sessionSettings.isDeepSearchEnabled = activeChat.settings.isDeepSearchEnabled;
+        }
 
         const title = scenarioToLoad.title || generateSessionTitle(messages) || 'New Chat';
         
         const newSession = createNewSession(sessionSettings, messages, title);
 
-        // Keep existing sessions intact to avoid accidental history loss.
-        updateAndPersistSessions(prev => [newSession, ...prev]);
+        setActiveMessages(messages);
         setActiveSessionId(newSession.id);
-        dbService.setActiveSessionId(newSession.id).catch(error => {
-            logService.error('Failed to persist active session after loading scenario', { error });
-        });
+        updateAndPersistSessions(prev => [newSession, ...prev]);
 
-        // Also update the global/default system prompt in app settings
-        setAppSettings(prev => ({
-            ...prev,
-            systemInstruction,
-        }));
+        setSelectedFiles([]);
+        setEditingMessageId(null);
+        setTimeout(() => {
+            document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Chat message input"]')?.focus();
+        }, 0);
     };
 
     return {

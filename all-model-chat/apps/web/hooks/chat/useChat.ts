@@ -96,9 +96,16 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
 
     const scenarioHandler = usePreloadedScenarios({
         appSettings,
-        setAppSettings,
         updateAndPersistSessions,
+        setActiveMessages,
         setActiveSessionId,
+        activeChat,
+        activeSessionId,
+        selectedFiles,
+        setSelectedFiles,
+        setEditingMessageId,
+        fileDraftsRef,
+        userScrolledUp,
     });
 
     const scrollHandler = useChatScroll({ messages, userScrolledUp });

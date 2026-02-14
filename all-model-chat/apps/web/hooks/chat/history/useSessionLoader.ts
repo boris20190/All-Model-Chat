@@ -39,7 +39,10 @@ export const useSessionLoader = ({
 
     const startNewChat = useCallback(() => {
         // If we are already on an empty chat, just focus input and don't create a duplicate
-        if (activeChat && activeChat.messages.length === 0 && !activeChat.systemInstruction) {
+        const isReusableBlankChat = !!activeChat
+            && activeChat.messages.length === 0
+            && activeChat.settings.systemInstruction === appSettings.systemInstruction;
+        if (isReusableBlankChat) {
             logService.info('Already on an empty chat, reusing session.');
             setTimeout(() => {
                 document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Chat message input"]')?.focus();
