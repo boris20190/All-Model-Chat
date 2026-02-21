@@ -3,6 +3,7 @@ import { Plus, RotateCcw, Check } from 'lucide-react';
 import { ModelOption } from '../../../../types';
 import { getDefaultModelOptions } from '../../../../utils/appUtils';
 import { ModelListEditorRow } from './ModelListEditorRow';
+import { QueryModels } from './QueryModels';
 
 interface ModelListEditorProps {
     availableModels: ModelOption[];
@@ -28,8 +29,19 @@ export const ModelListEditor: React.FC<ModelListEditorProps> = ({ availableModel
         setTempModels(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleAddModel = () => {
-        setTempModels(prev => [...prev, { id: '', name: '', isPinned: true }]);
+    const handleAddModel = (model?: ModelOption) => {
+        if (model) {
+            // Check if already exists
+            if (!tempModels.some(m => m.id === model.id)) {
+                setTempModels(prev => [...prev, model]);
+            }
+        } else {
+            setTempModels(prev => [...prev, { id: '', name: '', isPinned: true }]);
+        }
+    };
+
+    const handleRemoveQueriedModel = (modelId: string) => {
+        setTempModels(prev => prev.filter(m => m.id !== modelId));
     };
 
     const handleResetDefaults = () => {
@@ -66,12 +78,18 @@ export const ModelListEditor: React.FC<ModelListEditorProps> = ({ availableModel
                         No models in list. Add one or reset to defaults.
                     </div>
                 )}
+
+                <QueryModels 
+                    currentModels={tempModels} 
+                    onAdd={handleAddModel} 
+                    onRemove={handleRemoveQueriedModel} 
+                />
             </div>
             
             <div className="border-t border-[var(--theme-border-secondary)] p-3 bg-[var(--theme-bg-secondary)]/30 flex items-center justify-between gap-2">
                 <div className="flex gap-2">
                     <button 
-                        onClick={handleAddModel}
+                        onClick={() => handleAddModel()}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--theme-text-primary)] bg-[var(--theme-bg-primary)] border border-[var(--theme-border-secondary)] rounded hover:bg-[var(--theme-bg-tertiary)] transition-colors"
                     >
                         <Plus size={14} /> Add Model

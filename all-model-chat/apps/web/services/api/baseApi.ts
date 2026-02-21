@@ -88,7 +88,7 @@ export const buildGenerationConfig = (
     isGoogleSearchEnabled?: boolean,
     isCodeExecutionEnabled?: boolean,
     isUrlContextEnabled?: boolean,
-    thinkingLevel?: 'LOW' | 'HIGH',
+    thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH',
     aspectRatio?: string,
     isDeepSearchEnabled?: boolean,
     imageSize?: string,
@@ -167,13 +167,15 @@ export const buildGenerationConfig = (
 
     // Robust check for Gemini 3
     if (isGemini3) {
-        // Gemini 3.0 supports both thinkingLevel and thinkingBudget.
-        // We prioritize budget if it's explicitly set (>0).
         generationConfig.thinkingConfig = {
             includeThoughts: true, // Always capture thoughts in data; UI toggles visibility
         };
 
-        if (thinkingBudget > 0) {
+        const isGemini31ProPreview = modelId.includes('gemini-3.1-pro-preview');
+
+        if (isGemini31ProPreview) {
+            generationConfig.thinkingConfig.thinkingLevel = thinkingLevel || 'HIGH';
+        } else if (thinkingBudget > 0) {
             generationConfig.thinkingConfig.thinkingBudget = thinkingBudget;
         } else {
             generationConfig.thinkingConfig.thinkingLevel = thinkingLevel || 'HIGH';

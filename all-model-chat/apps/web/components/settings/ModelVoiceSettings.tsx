@@ -26,7 +26,7 @@ interface ModelVoiceSettingsProps {
   setSystemInstruction: (value: string) => void;
   thinkingBudget: number;
   setThinkingBudget: (value: number) => void;
-  thinkingLevel?: 'LOW' | 'HIGH';
+  thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
   setThinkingLevel?: (value: 'LOW' | 'HIGH') => void;
   showThoughts: boolean;
   setShowThoughts: (value: boolean) => void;

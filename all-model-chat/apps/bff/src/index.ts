@@ -6,6 +6,7 @@ import { GeminiProviderClient } from './providers/geminiClient.js';
 import { handleChatStreamRoute } from './routes/chatStream.js';
 import { handleFilesRoute } from './routes/files.js';
 import { handleGenerationRoute } from './routes/generation.js';
+import { handleModelsRoute } from './routes/models.js';
 
 const config = loadBffConfig();
 const keyPool = new ProviderKeyPool(config.providerApiKeys, {
@@ -72,6 +73,24 @@ const server = createServer((request, response) => {
     handleFilesRoute(request, response, geminiProviderClient).catch((error) => {
       if (response.writableEnded) return;
       const message = error instanceof Error ? error.message : 'Unexpected files route failure.';
+      response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(
+        JSON.stringify({
+          error: {
+            code: 'internal_error',
+            message,
+            status: 500,
+          },
+        })
+      );
+    });
+    return;
+  }
+
+  if (path === '/api/models') {
+    handleModelsRoute(request, response, geminiProviderClient).catch((error) => {
+      if (response.writableEnded) return;
+      const message = error instanceof Error ? error.message : 'Unexpected models route failure.';
       response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
       response.end(
         JSON.stringify({
