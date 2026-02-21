@@ -169,6 +169,13 @@ export const useChatStreamHandler = ({
         const streamOnPart = (part: Part) => {
             const anyPart = part as any;
             
+            if (anyPart.thought) {
+                // Should be routed through onThoughtChunk, but fallback here just in case
+                accumulatedThoughts += (anyPart.text || '');
+                streamingStore.updateThoughts(generationId, anyPart.text || '');
+                return;
+            }
+
             // 1. Accumulate plain text
             let chunkText = "";
             if (anyPart.text) {
