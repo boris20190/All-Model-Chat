@@ -18,6 +18,7 @@ import {
   readJsonBody,
   sendJson,
 } from './routeCommon.js';
+import { getSafeThinkingConfigForTask, isGemini3Model, normalizeModelIdForComparison } from '../utils/thinking.js';
 
 const parseString = (
   value: unknown,
@@ -263,23 +264,38 @@ const handleGenerateSpeech = async (
   sendJson(response, 200, { audioData });
 };
 
-const buildTranscribeConfig = (modelId: string): Record<string, unknown> => {
+export const buildTranscribeConfig = (modelId: string): Record<string, unknown> => {
   const config: Record<string, unknown> = {
     systemInstruction:
       '请准确转录语音内容。使用正确的标点符号。不要描述音频、回答问题或添加对话填充词，仅返回文本。若音频中无语音或仅有背景噪音，请不要输出任何文字。',
   };
+  const normalizedModelId = normalizeModelIdForComparison(modelId);
 
-  if (modelId.includes('gemini-3')) {
-    config.thinkingConfig = {
+  if (isGemini3Model(normalizedModelId)) {
+    config.thinkingConfig = getSafeThinkingConfigForTask({
+      modelId,
+      taskType: 'transcribe',
+      requestedLevel: 'MINIMAL',
       includeThoughts: false,
-      thinkingLevel: 'MINIMAL',
-    };
-  } else if (modelId === 'gemini-2.5-pro') {
-    config.thinkingConfig = { thinkingBudget: 128 };
-  } else if (modelId.includes('flash')) {
-    config.thinkingConfig = { thinkingBudget: 512 };
+    });
+  } else if (normalizedModelId === 'gemini-2.5-pro') {
+    config.thinkingConfig = getSafeThinkingConfigForTask({
+      modelId,
+      taskType: 'transcribe',
+      requestedBudget: 128,
+    });
+  } else if (normalizedModelId.includes('flash')) {
+    config.thinkingConfig = getSafeThinkingConfigForTask({
+      modelId,
+      taskType: 'transcribe',
+      requestedBudget: 512,
+    });
   } else {
-    config.thinkingConfig = { thinkingBudget: 0 };
+    config.thinkingConfig = getSafeThinkingConfigForTask({
+      modelId,
+      taskType: 'transcribe',
+      requestedBudget: 0,
+    });
   }
 
   return config;

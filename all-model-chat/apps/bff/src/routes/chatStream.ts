@@ -4,6 +4,7 @@ import { GeminiProviderClient } from '../providers/geminiClient.js';
 import type { ChatHistoryTurn, ChatStreamRequestPayload } from '@all-model-chat/shared-api';
 import type { ChatRole } from '@all-model-chat/shared-types';
 import { mapProviderError, sanitizeApiKey } from './routeCommon.js';
+import { normalizeThinkingLevelForModel, type ThinkingLevel } from '../utils/thinking.js';
 
 interface ValidationErrorShape {
   code: string;
@@ -347,11 +348,37 @@ export const handleChatStreamRoute = async (
       let hadCandidate = false;
       let hadCandidateParts = false;
       let hadThoughtChunk = false;
+      let effectiveConfig: unknown = payload.config;
+
+      if (isObject(payload.config)) {
+        const configClone: Record<string, unknown> = { ...(payload.config as Record<string, unknown>) };
+        const rawThinkingConfig = configClone.thinkingConfig;
+        if (isObject(rawThinkingConfig)) {
+          const thinkingConfigClone: Record<string, unknown> = { ...rawThinkingConfig };
+          const rawThinkingLevel =
+            typeof thinkingConfigClone.thinkingLevel === 'string'
+              ? (thinkingConfigClone.thinkingLevel as ThinkingLevel)
+              : undefined;
+
+          const normalizedThinkingLevel = normalizeThinkingLevelForModel(payload.model, rawThinkingLevel);
+          if (
+            rawThinkingLevel &&
+            normalizedThinkingLevel &&
+            rawThinkingLevel !== normalizedThinkingLevel
+          ) {
+            thinkingConfigClone.thinkingLevel = normalizedThinkingLevel;
+          }
+
+          configClone.thinkingConfig = thinkingConfigClone;
+        }
+
+        effectiveConfig = configClone;
+      }
 
       const result = await client.models.generateContentStream({
         model: payload.model,
         contents,
-        config: payload.config as any,
+        config: effectiveConfig as any,
       });
 
       for await (const chunkResponse of result) {

@@ -15,6 +15,12 @@ import { ContentPart } from '../../../types/chat';
 import { generateProjectContextSystemPrompt } from '../../useFolderToolExecutor';
 import { readProjectFile } from '../../../utils/folderImportUtils';
 import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
+import {
+    appendToolRoundToHistory,
+    createRollingHistory,
+    extractThoughtSignature,
+    MAX_TOOL_ROUNDS
+} from './toolCallHistory.js';
 
 interface UseApiInteractionProps {
     appSettings: AppSettings;
@@ -108,6 +114,8 @@ export const useApiInteraction = ({
 
         const shouldStripThinking = sessionToUpdate.hideThinkingInContext ?? appSettings.hideThinkingInContext;
         const historyForChat = await createChatHistoryForApi(baseMessagesForApi, shouldStripThinking);
+        const rollingHistory = createRollingHistory(historyForChat as any[], finalRole, finalParts as any[]);
+        let toolRoundCount = 0;
 
         // Prepare system instruction - inject project context if available
         let effectiveSystemInstruction = sessionToUpdate.systemInstruction;
@@ -173,12 +181,7 @@ export const useApiInteraction = ({
         ) => {
             const normalizedFunctionCallPart = (() => {
                 if (!functionCallPart) return functionCallPart;
-                const anyPart = functionCallPart as any;
-                const thoughtSignature =
-                    anyPart.thoughtSignature ||
-                    anyPart.thought_signature ||
-                    anyPart.functionCall?.thoughtSignature ||
-                    anyPart.functionCall?.thought_signature;
+                const thoughtSignature = extractThoughtSignature(functionCallPart);
 
                 if (!thoughtSignature) return functionCallPart;
 
@@ -191,9 +194,32 @@ export const useApiInteraction = ({
 
             const functionCall = normalizedFunctionCallPart?.functionCall;
             if (functionCall && functionCall.name === 'read_file' && projectContext) {
+                toolRoundCount += 1;
+                if (toolRoundCount > MAX_TOOL_ROUNDS) {
+                    logService.warn('Tool loop guard triggered; stopping recursive function-call chain.', {
+                        modelId: activeModelId,
+                        maxRounds: MAX_TOOL_ROUNDS,
+                        functionName: functionCall.name,
+                    });
+                    streamOnPart({
+                        text: `\n\n[Tool loop stopped after ${MAX_TOOL_ROUNDS} rounds to prevent infinite recursion.]`,
+                    });
+                    streamOnComplete(usageMetadata, groundingMetadata, urlContextMetadata, diagnostics);
+                    return;
+                }
+
+                const hasThoughtSignature = !!extractThoughtSignature(normalizedFunctionCallPart);
+                if (!hasThoughtSignature) {
+                    logService.warn('Function call part is missing thought signature; continuing with best effort.', {
+                        modelId: activeModelId,
+                        round: toolRoundCount,
+                        functionName: functionCall.name,
+                    });
+                }
+
                 logService.info(`Executing function call: ${functionCall.name}`, {
                     args: functionCall.args,
-                    hasThoughtSignature: !!(normalizedFunctionCallPart?.thoughtSignature || normalizedFunctionCallPart?.thought_signature)
+                    hasThoughtSignature
                 });
 
                 try {
@@ -206,31 +232,19 @@ export const useApiInteraction = ({
                     const fileContent = await readProjectFile(projectContext, filepath);
                     logService.info(`File read successfully: ${filepath}`, { length: fileContent.length });
 
-                    // Build new history with function call and result
-                    // CRITICAL: Use the COMPLETE Part object (with thoughtSignature) for model's turn
-                    const updatedHistory = [
-                        ...historyForChat,
-                        { role: 'user' as const, parts: finalParts },
-                        {
-                            role: 'model' as const,
-                            parts: [normalizedFunctionCallPart] // Use complete Part with thoughtSignature
-                        },
-                        {
-                            role: 'user' as const,
-                            parts: [{
-                                functionResponse: {
-                                    name: functionCall.name,
-                                    response: { content: fileContent }
-                                }
-                            }]
-                        }
-                    ];
+                    // Preserve complete multi-round chain: append model function call + user function response.
+                    appendToolRoundToHistory(
+                        rollingHistory as any[],
+                        normalizedFunctionCallPart,
+                        functionCall.name,
+                        fileContent
+                    );
 
                     // Continue the conversation with function result
                     await geminiServiceInstance.sendMessageStream(
                         keyToUse,
                         activeModelId,
-                        updatedHistory,
+                        rollingHistory as any,
                         [], // Empty parts since context is in history
                         config, // Keep original config (thinking enabled)
                         newAbortController.signal,
@@ -283,7 +297,7 @@ export const useApiInteraction = ({
                 }
             );
         }
-    }, [appSettings, messages, getStreamHandlers, handleGenerateCanvas, setSessionLoading, activeJobs, projectContext]);
+    }, [appSettings, messages, getStreamHandlers, handleGenerateCanvas, setSessionLoading, activeJobs, projectContext, onAutoContinue]);
 
     return { performApiCall };
 };
