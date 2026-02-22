@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, RotateCcw, Check } from 'lucide-react';
 import { ModelOption } from '../../../../types';
-import { getDefaultModelOptions } from '../../../../utils/appUtils';
+import { areModelIdsEquivalent, getDefaultModelOptions } from '../../../../utils/appUtils';
 import { ModelListEditorRow } from './ModelListEditorRow';
 import { QueryModels } from './QueryModels';
 
@@ -19,7 +19,11 @@ export const ModelListEditor: React.FC<ModelListEditorProps> = ({ availableModel
         setTempModels(availableModels);
     }, [availableModels]);
 
-    const handleUpdateTempModel = (index: number, field: keyof ModelOption, value: any) => {
+    const handleUpdateTempModel = (
+        index: number,
+        field: keyof ModelOption,
+        value: ModelOption[keyof ModelOption]
+    ) => {
         const updated = [...tempModels];
         updated[index] = { ...updated[index], [field]: value };
         setTempModels(updated);
@@ -32,8 +36,10 @@ export const ModelListEditor: React.FC<ModelListEditorProps> = ({ availableModel
     const handleAddModel = (model?: ModelOption) => {
         if (model) {
             // Check if already exists
-            if (!tempModels.some(m => m.id === model.id)) {
-                setTempModels(prev => [...prev, model]);
+            if (!tempModels.some(m => areModelIdsEquivalent(m.id, model.id))) {
+                const trimmedId = model.id.trim();
+                const trimmedName = (model.name || '').trim();
+                setTempModels(prev => [...prev, { id: trimmedId, name: trimmedName || trimmedId, isPinned: true }]);
             }
         } else {
             setTempModels(prev => [...prev, { id: '', name: '', isPinned: true }]);
@@ -41,7 +47,7 @@ export const ModelListEditor: React.FC<ModelListEditorProps> = ({ availableModel
     };
 
     const handleRemoveQueriedModel = (modelId: string) => {
-        setTempModels(prev => prev.filter(m => m.id !== modelId));
+        setTempModels(prev => prev.filter(m => !areModelIdsEquivalent(m.id, modelId)));
     };
 
     const handleResetDefaults = () => {
@@ -56,7 +62,15 @@ export const ModelListEditor: React.FC<ModelListEditorProps> = ({ availableModel
             ...m,
             name: m.name.trim() || m.id.trim()
         }));
-        onSave(refinedModels);
+
+        const dedupedModels: ModelOption[] = [];
+        for (const model of refinedModels) {
+            if (!dedupedModels.some(existing => areModelIdsEquivalent(existing.id, model.id))) {
+                dedupedModels.push(model);
+            }
+        }
+
+        onSave(dedupedModels);
         setIsEditingList(false);
     };
 

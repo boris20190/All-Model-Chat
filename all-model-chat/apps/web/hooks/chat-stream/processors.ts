@@ -215,7 +215,8 @@ export const finalizeMessages = (
     usageMetadata?: UsageMetadata,
     groundingMetadata?: any,
     urlContextMetadata?: any,
-    isAborted?: boolean
+    isAborted?: boolean,
+    emptyResponseErrorMessage?: string
 ): { updatedMessages: ChatMessage[], completedMessageForNotification: ChatMessage | null } => {
     const t = getTranslator(language);
     let cumulativeTotal = [...messages].reverse().find(m => m.cumulativeTotalTokens !== undefined && m.generationStartTime !== generationStartTime)?.cumulativeTotalTokens || 0;
@@ -258,7 +259,7 @@ export const finalizeMessages = (
             
             if (isEmpty && !isAborted) {
                 completedMessage.role = 'error';
-                completedMessage.content = t('empty_response_error');
+                completedMessage.content = emptyResponseErrorMessage || t('empty_response_error');
             }
 
             if (isLastMessageOfRun) {

@@ -2,12 +2,18 @@
 import React, { Dispatch, SetStateAction } from 'react';
 import { AppSettings, ChatMessage, UploadedFile, ChatSettings as IndividualChatSettings, SavedChatSession, ProjectContext } from '../../types';
 import { UsageMetadata } from '@google/genai';
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 
 export type SessionsUpdater = (updater: (prev: SavedChatSession[]) => SavedChatSession[]) => void;
 
 export interface StreamHandlerFunctions {
     streamOnError: (error: Error) => void;
-    streamOnComplete: (usageMetadata?: UsageMetadata, groundingMetadata?: any, urlContextMetadata?: any) => void;
+    streamOnComplete: (
+        usageMetadata?: UsageMetadata,
+        groundingMetadata?: any,
+        urlContextMetadata?: any,
+        diagnostics?: ChatStreamCompleteDiagnostics
+    ) => void;
     streamOnPart: (part: any) => void;
     onThoughtChunk: (thoughtChunk: string) => void;
 }

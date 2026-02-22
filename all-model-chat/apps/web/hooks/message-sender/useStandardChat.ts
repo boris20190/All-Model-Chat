@@ -1,6 +1,13 @@
 
 import { useCallback, useEffect, useRef } from 'react';
-import { generateUniqueId, buildContentParts, getKeyForRequest, performOptimisticSessionUpdate, logService } from '../../utils/appUtils';
+import {
+    generateUniqueId,
+    buildContentParts,
+    getKeyForRequest,
+    performOptimisticSessionUpdate,
+    logService,
+    getFastThinkingLevelForModel
+} from '../../utils/appUtils';
 import { DEFAULT_CHAT_SETTINGS, MODELS_SUPPORTING_RAW_MODE } from '../../constants/appConstants';
 import { UploadedFile, ChatMessage } from '../../types';
 import { StandardChatProps } from './types';
@@ -83,8 +90,7 @@ export const useStandardChat = ({
         let settingsForApi = { ...currentChatSettings };
 
         if (isFastMode) {
-            const isGemini3Flash = activeModelId.includes('gemini-3') && activeModelId.includes('flash');
-            const targetLevel = isGemini3Flash ? 'MINIMAL' : 'LOW';
+            const targetLevel = getFastThinkingLevelForModel(activeModelId);
 
             settingsForApi.thinkingLevel = targetLevel;
             settingsForApi.thinkingBudget = 0;

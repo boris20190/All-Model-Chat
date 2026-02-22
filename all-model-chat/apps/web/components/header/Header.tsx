@@ -27,7 +27,7 @@ interface HeaderProps {
   onTogglePip: () => void;
   themeId: string;
   thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
-  onSetThinkingLevel: (level: 'LOW' | 'HIGH') => void;
+  onSetThinkingLevel: (level: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH') => void;
   newChatShortcut?: string;
   pipShortcut?: string;
 }

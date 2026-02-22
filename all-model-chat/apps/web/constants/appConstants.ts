@@ -67,7 +67,7 @@ export const DEFAULT_CHAT_SETTINGS = {
   systemInstruction: DEFAULT_SYSTEM_INSTRUCTION,
   ttsVoice: DEFAULT_TTS_VOICE,
   thinkingBudget: DEFAULT_THINKING_BUDGET,
-  thinkingLevel: DEFAULT_THINKING_LEVEL as 'LOW' | 'HIGH',
+  thinkingLevel: DEFAULT_THINKING_LEVEL as 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH',
   lockedApiKey: null,
   isGoogleSearchEnabled: false,
   isCodeExecutionEnabled: false,

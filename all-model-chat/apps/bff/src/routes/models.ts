@@ -5,6 +5,7 @@ import {
   RequestValidationError,
   mapProviderError,
   parseRequestUrl,
+  sanitizeApiKey,
   sendJson,
 } from './routeCommon.js';
 
@@ -67,8 +68,8 @@ const extractApiKeyOverride = (request: IncomingMessage): string | undefined => 
   const rawHeader = request.headers['x-api-key-override'];
   const value = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
   if (!value) return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  const sanitized = sanitizeApiKey(value);
+  return sanitized.length > 0 ? sanitized : undefined;
 };
 
 const normalizeModelId = (rawName: string): string => {

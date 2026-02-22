@@ -1,7 +1,8 @@
 
-import React, { Dispatch, SetStateAction, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { AppSettings, SavedChatSession, ChatMessage, ChatSettings as IndividualChatSettings } from '../../types';
 import { Part, UsageMetadata } from '@google/genai';
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 import { useApiErrorHandler } from './useApiErrorHandler';
 import { logService, showNotification, calculateTokenStats, playCompletionSound, createMessage } from '../../utils/appUtils';
 import { APP_LOGO_SVG_DATA_URI } from '../../constants/appConstants';
@@ -16,6 +17,177 @@ interface ChatStreamHandlerProps {
     setSessionLoading: (sessionId: string, isLoading: boolean) => void;
     activeJobs: React.MutableRefObject<Map<string, AbortController>>;
 }
+
+const extractBlockedSafetyCategories = (ratings: unknown[] | undefined): string[] => {
+    if (!Array.isArray(ratings)) return [];
+    const categories: string[] = [];
+
+    for (const rating of ratings) {
+        if (typeof rating !== 'object' || rating === null) continue;
+        const data = rating as Record<string, unknown>;
+        if (data.blocked !== true) continue;
+
+        const category = typeof data.category === 'string' ? data.category : 'UNKNOWN_CATEGORY';
+        const probability = typeof data.probability === 'string' ? data.probability : null;
+        categories.push(probability ? `${category} (${probability})` : category);
+    }
+
+    return categories;
+};
+
+const buildDetailedEmptyResponseMessage = (
+    language: 'en' | 'zh',
+    diagnostics?: ChatStreamCompleteDiagnostics
+): string | undefined => {
+    if (!diagnostics) {
+        return language === 'zh'
+            ? '模型未返回可显示内容。未收到上游诊断字段（complete.diagnostics）。请检查浏览器 Network 中 /api/chat/stream 的 complete 事件。'
+            : 'Model returned no displayable content. No upstream diagnostics were received (complete.diagnostics). Check /api/chat/stream complete event in browser Network.';
+    }
+
+    const lines: string[] = [];
+    const promptFeedback = diagnostics.promptFeedback;
+
+    if (promptFeedback?.blockReason) {
+        lines.push(language === 'zh'
+            ? `Prompt 被拦截，原因: ${promptFeedback.blockReason}`
+            : `Prompt was blocked: ${promptFeedback.blockReason}`);
+    }
+
+    if (promptFeedback?.blockReasonMessage) {
+        lines.push(language === 'zh'
+            ? `拦截说明: ${promptFeedback.blockReasonMessage}`
+            : `Block message: ${promptFeedback.blockReasonMessage}`);
+    }
+
+    if (diagnostics.finishReason) {
+        lines.push(language === 'zh'
+            ? `模型结束原因: ${diagnostics.finishReason}`
+            : `Model finish reason: ${diagnostics.finishReason}`);
+    }
+
+    if (diagnostics.finishMessage) {
+        lines.push(language === 'zh'
+            ? `结束说明: ${diagnostics.finishMessage}`
+            : `Finish message: ${diagnostics.finishMessage}`);
+    }
+
+    if (diagnostics.streamError?.code) {
+        lines.push(language === 'zh'
+            ? `上游错误码: ${diagnostics.streamError.code}`
+            : `Upstream error code: ${diagnostics.streamError.code}`);
+    }
+
+    if (typeof diagnostics.streamError?.status === 'number') {
+        lines.push(language === 'zh'
+            ? `上游 HTTP 状态: ${diagnostics.streamError.status}`
+            : `Upstream HTTP status: ${diagnostics.streamError.status}`);
+    }
+
+    if (diagnostics.streamError?.providerStatus) {
+        lines.push(language === 'zh'
+            ? `上游状态标识: ${diagnostics.streamError.providerStatus}`
+            : `Upstream status flag: ${diagnostics.streamError.providerStatus}`);
+    }
+
+    if (diagnostics.streamError?.providerReason) {
+        lines.push(language === 'zh'
+            ? `上游错误原因: ${diagnostics.streamError.providerReason}`
+            : `Upstream error reason: ${diagnostics.streamError.providerReason}`);
+    }
+
+    if (diagnostics.streamError?.providerMessage) {
+        lines.push(language === 'zh'
+            ? `上游错误消息: ${diagnostics.streamError.providerMessage}`
+            : `Upstream error message: ${diagnostics.streamError.providerMessage}`);
+    }
+
+    if (
+        diagnostics.streamError?.message &&
+        diagnostics.streamError.message !== diagnostics.streamError.providerMessage
+    ) {
+        lines.push(language === 'zh'
+            ? `代理错误消息: ${diagnostics.streamError.message}`
+            : `Proxy error message: ${diagnostics.streamError.message}`);
+    }
+
+    if (diagnostics.streamMeta?.provider) {
+        lines.push(language === 'zh'
+            ? `流式来源: ${diagnostics.streamMeta.provider}`
+            : `Stream provider: ${diagnostics.streamMeta.provider}`);
+    }
+
+    if (diagnostics.streamMeta?.keyId) {
+        lines.push(language === 'zh'
+            ? `流式 keyId: ${diagnostics.streamMeta.keyId}`
+            : `Stream keyId: ${diagnostics.streamMeta.keyId}`);
+    }
+
+    const promptBlockedCategories = extractBlockedSafetyCategories(promptFeedback?.safetyRatings);
+    if (promptBlockedCategories.length > 0) {
+        lines.push(language === 'zh'
+            ? `Prompt 安全拦截类别: ${promptBlockedCategories.join(', ')}`
+            : `Prompt safety-blocked categories: ${promptBlockedCategories.join(', ')}`);
+    }
+
+    const candidateBlockedCategories = extractBlockedSafetyCategories(diagnostics.candidateSafetyRatings);
+    if (candidateBlockedCategories.length > 0) {
+        lines.push(language === 'zh'
+            ? `响应安全拦截类别: ${candidateBlockedCategories.join(', ')}`
+            : `Response safety-blocked categories: ${candidateBlockedCategories.join(', ')}`);
+    }
+
+    if (diagnostics.hadCandidate === false) {
+        lines.push(language === 'zh'
+            ? '服务端未返回 candidate。'
+            : 'No candidate was returned by upstream.');
+    }
+
+    if (diagnostics.hadCandidate === true && diagnostics.hadCandidateParts === false) {
+        lines.push(language === 'zh'
+            ? 'candidate 存在，但没有可渲染 parts。'
+            : 'Candidate exists, but contains no renderable parts.');
+    }
+
+    if (diagnostics.responseId) {
+        lines.push(language === 'zh'
+            ? `Response ID: ${diagnostics.responseId}`
+            : `Response ID: ${diagnostics.responseId}`);
+    }
+
+    if (diagnostics.modelVersion) {
+        lines.push(language === 'zh'
+            ? `模型版本: ${diagnostics.modelVersion}`
+            : `Model version: ${diagnostics.modelVersion}`);
+    }
+
+    if (
+        diagnostics.hadCandidate !== undefined ||
+        diagnostics.hadCandidateParts !== undefined ||
+        diagnostics.hadThoughtChunk !== undefined
+    ) {
+        lines.push(
+            language === 'zh'
+                ? `候选状态: hadCandidate=${String(diagnostics.hadCandidate)}, hadCandidateParts=${String(diagnostics.hadCandidateParts)}, hadThoughtChunk=${String(diagnostics.hadThoughtChunk)}`
+                : `Candidate status: hadCandidate=${String(diagnostics.hadCandidate)}, hadCandidateParts=${String(diagnostics.hadCandidateParts)}, hadThoughtChunk=${String(diagnostics.hadThoughtChunk)}`
+        );
+    }
+
+    if (lines.length === 0) {
+        const rawDiagnostics = JSON.stringify(diagnostics);
+        lines.push(
+            language === 'zh'
+                ? `诊断对象未包含可识别字段。raw=${rawDiagnostics}`
+                : `Diagnostics object had no recognized fields. raw=${rawDiagnostics}`
+        );
+    }
+
+    const header = language === 'zh'
+        ? '模型未返回可显示内容。诊断信息:'
+        : 'Model returned no displayable content. Diagnostics:';
+
+    return `${header}\n${lines.map((line, index) => `${index + 1}. ${line}`).join('\n')}`;
+};
 
 export const useChatStreamHandler = ({
     appSettings,
@@ -51,7 +223,12 @@ export const useChatStreamHandler = ({
             streamingStore.clear(generationId);
         };
 
-        const streamOnComplete = (usageMetadata?: UsageMetadata, groundingMetadata?: any, urlContextMetadata?: any) => {
+        const streamOnComplete = (
+            usageMetadata?: UsageMetadata,
+            groundingMetadata?: any,
+            urlContextMetadata?: any,
+            diagnostics?: ChatStreamCompleteDiagnostics
+        ) => {
             const lang = appSettings.language === 'system' 
                 ? (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en')
                 : appSettings.language;
@@ -70,6 +247,16 @@ export const useChatStreamHandler = ({
             }
 
             const isEmptyResponse = !accumulatedText.trim() && !accumulatedThoughts.trim();
+            const detailedEmptyResponseMessage = isEmptyResponse
+                ? buildDetailedEmptyResponseMessage(lang, diagnostics)
+                : undefined;
+            if (isEmptyResponse) {
+                logService.warn('Stream completed with empty response payload.', {
+                    sessionId: currentSessionId,
+                    generationId,
+                    diagnostics,
+                });
+            }
             const shouldAutoContinue = !!onEmptyResponse && isEmptyResponse && !abortController.signal.aborted;
             if (shouldAutoContinue) {
                 onEmptyResponse?.(generationId);
@@ -131,7 +318,8 @@ export const useChatStreamHandler = ({
                     usageMetadata,
                     groundingMetadata,
                     urlContextMetadata,
-                    abortController.signal.aborted || shouldSuppressEmptyError
+                    abortController.signal.aborted || shouldSuppressEmptyError,
+                    detailedEmptyResponseMessage
                 );
 
                 sessionToUpdate.messages = finalizationResult.updatedMessages;

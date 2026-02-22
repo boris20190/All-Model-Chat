@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback, Dispatch, SetStateAction } from 'react';
 import { Command } from '../components/chat/input/SlashCommandMenu';
-import { translations } from '../utils/appUtils';
+import { translations, getFastThinkingLevelForModel } from '../utils/appUtils';
 import { ModelOption } from '../types';
 
 interface UseSlashCommandsProps {
@@ -80,8 +80,7 @@ export const useSlashCommands = ({
     { name: 'canvas', description: t('help_cmd_canvas'), icon: 'canvas', action: onToggleCanvasPrompt },
     { name: 'pip', description: t('help_cmd_pip'), icon: 'pip', action: onTogglePip },
     { name: 'fast', description: t('help_cmd_fast'), icon: 'fast', action: () => {
-        const isGemini3Flash = currentModelId.includes('gemini-3') && currentModelId.includes('flash');
-        const targetLevel = isGemini3Flash ? 'MINIMAL' : 'LOW';
+        const targetLevel = getFastThinkingLevelForModel(currentModelId);
         onSetThinkingLevel(thinkingLevel === targetLevel ? 'HIGH' : targetLevel);
     }},
   ], [t, onToggleGoogleSearch, onToggleDeepSearch, onToggleCodeExecution, onToggleUrlContext, onClearChat, onNewChat, onOpenSettings, onToggleCanvasPrompt, onTogglePinCurrentSession, onRetryLastTurn, onStopGenerating, onAttachmentAction, setInputText, textareaRef, setIsHelpModalOpen, onEditLastUserMessage, onTogglePip, onSetThinkingLevel, thinkingLevel, currentModelId]);

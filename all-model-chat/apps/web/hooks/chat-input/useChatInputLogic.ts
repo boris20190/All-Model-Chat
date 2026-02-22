@@ -15,6 +15,7 @@ import { useInputAndPasteHandlers } from './handlers/useInputAndPasteHandlers';
 import { useSubmissionHandlers } from './handlers/useSubmissionHandlers';
 import { useKeyboardHandlers } from './handlers/useKeyboardHandlers';
 import { useFileManagementHandlers } from './handlers/useFileManagementHandlers';
+import { normalizeThinkingLevelForModel } from '../../utils/appUtils';
 
 export const useChatInputLogic = (props: ChatInputProps) => {
     const {
@@ -111,7 +112,10 @@ export const useChatInputLogic = (props: ChatInputProps) => {
         setInputText: inputState.setInputText,
         onTogglePip, 
         currentModelId: currentChatSettings.modelId,
-        onSetThinkingLevel: (level) => setCurrentChatSettings(prev => ({ ...prev, thinkingLevel: level })),
+        onSetThinkingLevel: (level) => {
+            const compatibleLevel = normalizeThinkingLevelForModel(currentChatSettings.modelId, level) || 'HIGH';
+            setCurrentChatSettings(prev => ({ ...prev, thinkingLevel: compatibleLevel }));
+        },
         thinkingLevel: currentChatSettings.thinkingLevel,
     });
 

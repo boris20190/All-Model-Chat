@@ -5,6 +5,17 @@ import { logService } from '../services/logService';
 
 export const BACKEND_MANAGED_KEY_SENTINEL = '__BFF_BACKEND_MANAGED_KEY__';
 
+export const sanitizeApiKey = (rawKey: string): string => {
+    return rawKey
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u00A0]/g, ' ')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim()
+        .replace(/^["']+|["']+$/g, '');
+};
+
 export const getActiveApiConfig = (appSettings: AppSettings): { apiKeysString: string | null } => {
     if (appSettings.useCustomApiConfig) {
         return {
@@ -25,7 +36,7 @@ export const parseApiKeys = (apiKeysString: string | null): string[] => {
     if (!apiKeysString) return [];
     return apiKeysString
         .split(/[\n,]+/)
-        .map(k => k.trim().replace(/^["']|["']$/g, ''))
+        .map(sanitizeApiKey)
         .filter(k => k.length > 0);
 };
 

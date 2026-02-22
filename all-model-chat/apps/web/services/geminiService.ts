@@ -1,6 +1,7 @@
 
 import { GeminiService, ModelOption } from '../types';
 import { Part, UsageMetadata, File as GeminiFile, ChatHistoryItem } from "@google/genai";
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 import { uploadFileApi, getFileMetadataApi } from './api/fileApi';
 import { generateImagesApi, editImageApi, generateSpeechApi, transcribeAudioApi, translateTextApi, generateTitleApi, generateSuggestionsApi, countTokensApi } from './api/generationApi';
 import { sendStatelessMessageStreamApi, sendStatelessMessageNonStreamApi } from './api/chatApi';
@@ -68,7 +69,13 @@ class GeminiServiceImpl implements GeminiService {
         onPart: (part: Part) => void,
         onThoughtChunk: (chunk: string) => void,
         onError: (error: Error) => void,
-        onComplete: (usageMetadata?: UsageMetadata, groundingMetadata?: any, urlContextMetadata?: any, functionCallPart?: Part) => void,
+        onComplete: (
+            usageMetadata?: UsageMetadata,
+            groundingMetadata?: any,
+            urlContextMetadata?: any,
+            functionCallPart?: Part,
+            diagnostics?: ChatStreamCompleteDiagnostics
+        ) => void,
         role: 'user' | 'model' = 'user'
     ): Promise<void> {
         return sendStatelessMessageStreamApi(
@@ -84,7 +91,14 @@ class GeminiServiceImpl implements GeminiService {
         config: any,
         abortSignal: AbortSignal,
         onError: (error: Error) => void,
-        onComplete: (parts: Part[], thoughtsText?: string, usageMetadata?: UsageMetadata, groundingMetadata?: any, urlContextMetadata?: any) => void
+        onComplete: (
+            parts: Part[],
+            thoughtsText?: string,
+            usageMetadata?: UsageMetadata,
+            groundingMetadata?: any,
+            urlContextMetadata?: any,
+            diagnostics?: ChatStreamCompleteDiagnostics
+        ) => void
     ): Promise<void> {
         return sendStatelessMessageNonStreamApi(
             apiKey, modelId, history, parts, config, abortSignal, onError, onComplete

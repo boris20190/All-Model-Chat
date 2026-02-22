@@ -38,7 +38,7 @@ export interface ChatAreaProps {
   isGuideModeActive: boolean;
   isKeyLocked: boolean;
   themeId: string;
-  onSetThinkingLevel: (level: 'LOW' | 'HIGH') => void;
+  onSetThinkingLevel: (level: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH') => void;
 
   // Models Error
   modelsLoadingError: string | null;

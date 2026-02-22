@@ -4,7 +4,7 @@ import { Zap } from 'lucide-react';
 import { ModelOption } from '../../types';
 import { GoogleSpinner } from '../icons/GoogleSpinner';
 import { ModelPicker } from '../shared/ModelPicker';
-import { isGemini3Model } from '../../utils/appUtils';
+import { getFastThinkingLevelForModel, isGemini3Model } from '../../utils/appUtils';
 
 interface HeaderModelSelectorProps {
   currentModelName?: string;
@@ -51,8 +51,7 @@ export const HeaderModelSelector: React.FC<HeaderModelSelectorProps> = ({
   // Determine the target "Fast" level based on model capabilities
   // Gemini 3 Flash models support MINIMAL thinking for maximum speed
   // Other Gemini 3 models (like Pro) typically bottom out at LOW
-  const isFlash = selectedModelId.toLowerCase().includes('flash');
-  const targetFastLevel = isFlash ? 'MINIMAL' : 'LOW';
+  const targetFastLevel = getFastThinkingLevelForModel(selectedModelId);
   
   // Consider it "Fast Mode" active if the current level matches the target fast level
   const isFastState = thinkingLevel === targetFastLevel;

@@ -67,6 +67,42 @@ export const isGemini3Model = (modelId: string): boolean => {
     return GEMINI_3_RO_MODELS.some(m => lowerId.includes(m)) || lowerId.includes('gemini-3-pro') || lowerId.includes('gemini-3.1');
 };
 
+export const normalizeModelIdForComparison = (modelId: string | undefined | null): string => {
+    if (!modelId) return '';
+    const normalized = modelId.trim().toLowerCase();
+    return normalized.startsWith('models/') ? normalized.slice('models/'.length) : normalized;
+};
+
+export const areModelIdsEquivalent = (left: string | undefined | null, right: string | undefined | null): boolean => {
+    const normalizedLeft = normalizeModelIdForComparison(left);
+    const normalizedRight = normalizeModelIdForComparison(right);
+    return normalizedLeft.length > 0 && normalizedLeft === normalizedRight;
+};
+
+export const getFastThinkingLevelForModel = (modelId: string): 'MINIMAL' | 'LOW' => {
+    const normalizedModelId = normalizeModelIdForComparison(modelId);
+    const isGemini3Flash = normalizedModelId.includes('gemini-3') && normalizedModelId.includes('flash');
+    return isGemini3Flash ? 'MINIMAL' : 'LOW';
+};
+
+export const normalizeThinkingLevelForModel = (
+    modelId: string,
+    thinkingLevel: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | undefined
+): 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | undefined => {
+    if (!thinkingLevel) return thinkingLevel;
+
+    const normalizedModelId = normalizeModelIdForComparison(modelId);
+    const isGemini3 = normalizedModelId.includes('gemini-3');
+    const isGemini3Flash = normalizedModelId.includes('gemini-3') && normalizedModelId.includes('flash');
+
+    // MINIMAL is a Flash-oriented level and is rejected by several Pro variants (e.g. 3.1 Pro Preview).
+    if (thinkingLevel === 'MINIMAL' && (!isGemini3 || !isGemini3Flash)) {
+        return 'LOW';
+    }
+
+    return thinkingLevel;
+};
+
 // --- Model Settings Cache ---
 const MODEL_SETTINGS_CACHE_KEY = 'model_settings_cache';
 

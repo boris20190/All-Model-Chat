@@ -6,6 +6,9 @@ export interface ApiErrorPayload {
   message: string;
   status: number;
   retryable: boolean;
+  providerStatus?: string;
+  providerReason?: string;
+  providerMessage?: string;
 }
 
 export interface BffErrorPayload {
@@ -13,6 +16,9 @@ export interface BffErrorPayload {
   message?: string;
   status?: number;
   retryable?: boolean;
+  providerStatus?: string;
+  providerReason?: string;
+  providerMessage?: string;
 }
 
 export interface ChatHistoryTurn {
@@ -42,11 +48,41 @@ export interface ChatStreamThoughtEventPayload {
   chunk: string;
 }
 
+export interface ChatStreamCompleteDiagnostics {
+  finishReason?: string;
+  finishMessage?: string;
+  candidateSafetyRatings?: unknown[];
+  promptFeedback?: {
+    blockReason?: string;
+    blockReasonMessage?: string;
+    safetyRatings?: unknown[];
+  };
+  responseId?: string;
+  modelVersion?: string;
+  hadCandidate?: boolean;
+  hadCandidateParts?: boolean;
+  hadThoughtChunk?: boolean;
+  streamMeta?: {
+    provider?: string;
+    keyId?: string;
+  };
+  streamError?: {
+    code?: string;
+    status?: number;
+    retryable?: boolean;
+    message?: string;
+    providerStatus?: string;
+    providerReason?: string;
+    providerMessage?: string;
+  };
+}
+
 export interface ChatStreamCompleteEventPayload {
   usageMetadata?: UsageMetadata;
   groundingMetadata?: unknown;
   urlContextMetadata?: unknown;
   functionCallPart?: Part;
+  diagnostics?: ChatStreamCompleteDiagnostics;
 }
 
 export interface ChatStreamErrorEventPayload {

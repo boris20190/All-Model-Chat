@@ -1,8 +1,9 @@
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { GoogleGenAI, Part, UsageMetadata } from '@google/genai';
 import { GeminiProviderClient } from '../providers/geminiClient.js';
-import type { ApiErrorPayload, ChatHistoryTurn, ChatStreamRequestPayload } from '@all-model-chat/shared-api';
+import type { ChatHistoryTurn, ChatStreamRequestPayload } from '@all-model-chat/shared-api';
 import type { ChatRole } from '@all-model-chat/shared-types';
+import { mapProviderError, sanitizeApiKey } from './routeCommon.js';
 
 interface ValidationErrorShape {
   code: string;
@@ -241,9 +242,9 @@ const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
   const apiKeyOverrideRaw = parsed.apiKeyOverride;
   let apiKeyOverride: string | undefined;
   if (typeof apiKeyOverrideRaw === 'string') {
-    const trimmed = apiKeyOverrideRaw.trim();
-    if (trimmed.length > 0) {
-      apiKeyOverride = trimmed;
+    const sanitized = sanitizeApiKey(apiKeyOverrideRaw);
+    if (sanitized.length > 0) {
+      apiKeyOverride = sanitized;
     }
   }
   const history = normalizeHistory(parsed.history);
@@ -279,68 +280,6 @@ const mapValidationError = (error: unknown): ValidationErrorShape => {
   };
 };
 
-const readNumericStatus = (error: unknown): number | null => {
-  if (!isObject(error)) return null;
-
-  const status = error.status;
-  if (typeof status === 'number' && Number.isFinite(status)) return status;
-
-  const statusCode = error.statusCode;
-  if (typeof statusCode === 'number' && Number.isFinite(statusCode)) return statusCode;
-
-  return null;
-};
-
-const mapProviderError = (error: unknown): ApiErrorPayload => {
-  const status = readNumericStatus(error) ?? 500;
-  const message = error instanceof Error ? error.message : 'Provider stream failed.';
-
-  if (message.includes('No provider API keys configured.')) {
-    return {
-      code: 'provider_key_not_configured',
-      message,
-      status: 503,
-      retryable: false,
-    };
-  }
-  if (message.includes('No provider API keys available.')) {
-    return {
-      code: 'provider_key_temporarily_unavailable',
-      message,
-      status: 503,
-      retryable: true,
-    };
-  }
-
-  if (status === 400) {
-    return { code: 'provider_invalid_request', message, status, retryable: false };
-  }
-  if (status === 401) {
-    return { code: 'provider_auth_failed', message, status, retryable: false };
-  }
-  if (status === 403) {
-    return { code: 'provider_forbidden', message, status, retryable: false };
-  }
-  if (status === 404) {
-    return { code: 'provider_not_found', message, status, retryable: false };
-  }
-  if (status === 408) {
-    return { code: 'provider_timeout', message, status, retryable: true };
-  }
-  if (status === 429) {
-    return { code: 'provider_rate_limited', message, status, retryable: true };
-  }
-  if (status >= 500 && status <= 599) {
-    return { code: 'provider_upstream_error', message, status, retryable: true };
-  }
-
-  return {
-    code: 'provider_unknown_error',
-    message,
-    status,
-    retryable: status >= 500 || status === 429,
-  };
-};
 
 export const handleChatStreamRoute = async (
   request: IncomingMessage,
@@ -393,6 +332,21 @@ export const handleChatStreamRoute = async (
       let latestToolCallFunction: unknown = undefined;
       let latestToolCallSignature: string | undefined = undefined;
       let latestThoughtSignatureFromParts: string | undefined = undefined;
+      let finalFinishReason: string | undefined = undefined;
+      let finalFinishMessage: string | undefined = undefined;
+      let finalCandidateSafetyRatings: unknown[] | undefined = undefined;
+      let finalPromptFeedback:
+        | {
+            blockReason?: string;
+            blockReasonMessage?: string;
+            safetyRatings?: unknown[];
+          }
+        | undefined = undefined;
+      let finalResponseId: string | undefined = undefined;
+      let finalModelVersion: string | undefined = undefined;
+      let hadCandidate = false;
+      let hadCandidateParts = false;
+      let hadThoughtChunk = false;
 
       const result = await client.models.generateContentStream({
         model: payload.model,
@@ -405,6 +359,24 @@ export const handleChatStreamRoute = async (
           break;
         }
 
+        if (typeof chunkResponse.responseId === 'string' && chunkResponse.responseId.length > 0) {
+          finalResponseId = chunkResponse.responseId;
+        }
+
+        if (typeof chunkResponse.modelVersion === 'string' && chunkResponse.modelVersion.length > 0) {
+          finalModelVersion = chunkResponse.modelVersion;
+        }
+
+        if (chunkResponse.promptFeedback) {
+          finalPromptFeedback = {
+            blockReason: chunkResponse.promptFeedback.blockReason,
+            blockReasonMessage: chunkResponse.promptFeedback.blockReasonMessage,
+            safetyRatings: Array.isArray(chunkResponse.promptFeedback.safetyRatings)
+              ? [...chunkResponse.promptFeedback.safetyRatings]
+              : undefined,
+          };
+        }
+
         if (chunkResponse.usageMetadata) {
           finalUsageMetadata = chunkResponse.usageMetadata;
         }
@@ -412,6 +384,19 @@ export const handleChatStreamRoute = async (
         const candidate = chunkResponse.candidates?.[0];
         if (!candidate) {
           continue;
+        }
+        hadCandidate = true;
+
+        if (candidate.finishReason) {
+          finalFinishReason = String(candidate.finishReason);
+        }
+
+        if (typeof candidate.finishMessage === 'string' && candidate.finishMessage.length > 0) {
+          finalFinishMessage = candidate.finishMessage;
+        }
+
+        if (Array.isArray(candidate.safetyRatings)) {
+          finalCandidateSafetyRatings = [...candidate.safetyRatings];
         }
 
         if (candidate.groundingMetadata) {
@@ -453,6 +438,7 @@ export const handleChatStreamRoute = async (
         if (!candidateParts?.length) {
           continue;
         }
+        hadCandidateParts = true;
 
         for (const part of candidateParts) {
           const anyPart = part as any;
@@ -467,6 +453,7 @@ export const handleChatStreamRoute = async (
           }
 
           if (anyPart.thought) {
+            hadThoughtChunk = true;
             writeSseEvent(response, 'thought', { chunk: part.text || '' });
             continue;
           }
@@ -480,9 +467,9 @@ export const handleChatStreamRoute = async (
           functionCall: latestToolCallFunction as Part['functionCall'],
           ...(latestToolCallSignature || latestThoughtSignatureFromParts
             ? {
-                thoughtSignature: latestToolCallSignature || latestThoughtSignatureFromParts,
-                thought_signature: latestToolCallSignature || latestThoughtSignatureFromParts,
-              }
+              thoughtSignature: latestToolCallSignature || latestThoughtSignatureFromParts,
+              thought_signature: latestToolCallSignature || latestThoughtSignatureFromParts,
+            }
             : {}),
         } as any;
       } else if (detectedFunctionCallPart && (latestToolCallSignature || latestThoughtSignatureFromParts)) {
@@ -502,6 +489,17 @@ export const handleChatStreamRoute = async (
           groundingMetadata: finalGroundingMetadata,
           urlContextMetadata: finalUrlContextMetadata,
           functionCallPart: detectedFunctionCallPart,
+          diagnostics: {
+            finishReason: finalFinishReason,
+            finishMessage: finalFinishMessage,
+            candidateSafetyRatings: finalCandidateSafetyRatings,
+            promptFeedback: finalPromptFeedback,
+            responseId: finalResponseId,
+            modelVersion: finalModelVersion,
+            hadCandidate,
+            hadCandidateParts,
+            hadThoughtChunk,
+          },
         });
       }
     };

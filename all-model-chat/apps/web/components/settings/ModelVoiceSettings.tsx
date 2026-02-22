@@ -27,7 +27,7 @@ interface ModelVoiceSettingsProps {
   thinkingBudget: number;
   setThinkingBudget: (value: number) => void;
   thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
-  setThinkingLevel?: (value: 'LOW' | 'HIGH') => void;
+  setThinkingLevel?: (value: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH') => void;
   showThoughts: boolean;
   setShowThoughts: (value: boolean) => void;
   temperature: number;

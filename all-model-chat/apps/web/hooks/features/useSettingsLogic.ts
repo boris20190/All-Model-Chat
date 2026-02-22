@@ -2,7 +2,14 @@
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { AppSettings } from '../../types';
 import { DEFAULT_APP_SETTINGS } from '../../constants/appConstants';
-import { translations, logService, cacheModelSettings, getCachedModelSettings, adjustThinkingBudget } from '../../utils/appUtils';
+import {
+    translations,
+    logService,
+    cacheModelSettings,
+    getCachedModelSettings,
+    adjustThinkingBudget,
+    normalizeThinkingLevelForModel
+} from '../../utils/appUtils';
 import { MediaResolution } from '../../types/settings';
 import { IconInterface, IconModel, IconApiKey, IconData, IconAbout, IconKeyboard } from '../../components/icons/CustomIcons';
 
@@ -261,7 +268,8 @@ export const useSettingsLogic = ({
         const cached = getCachedModelSettings(newModelId);
 
         let newThinkingBudget = cached?.thinkingBudget ?? settingsToCache.thinkingBudget;
-        const newThinkingLevel = cached?.thinkingLevel ?? settingsToCache.thinkingLevel;
+        const rawThinkingLevel = cached?.thinkingLevel ?? settingsToCache.thinkingLevel;
+        const newThinkingLevel = normalizeThinkingLevelForModel(newModelId, rawThinkingLevel);
         const newMediaResolution = cached?.mediaResolution ?? settingsToCache.mediaResolution ?? MediaResolution.MEDIA_RESOLUTION_UNSPECIFIED;
 
         // 3. Apply defaults/clamping logic using shared helper

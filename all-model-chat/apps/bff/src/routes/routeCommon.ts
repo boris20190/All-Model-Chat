@@ -18,6 +18,17 @@ export const isObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;
 };
 
+export const sanitizeApiKey = (rawKey: string): string => {
+  return rawKey
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u00A0]/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .replace(/^["']+|["']+$/g, '');
+};
+
 export const sendJson = (response: ServerResponse, status: number, payload: unknown): void => {
   response.writeHead(status, JSON_HEADERS);
   response.end(JSON.stringify(payload));
@@ -126,6 +137,82 @@ const readNumericStatus = (error: unknown): number | null => {
   return null;
 };
 
+const tryParseJsonObject = (rawText: string | undefined): Record<string, unknown> | null => {
+  if (!rawText) return null;
+  const text = rawText.trim();
+  if (!text.startsWith('{') && !text.startsWith('[')) return null;
+
+  try {
+    const parsed = JSON.parse(text);
+    return isObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const readProviderReasonFromDetails = (details: unknown): string | undefined => {
+  if (!Array.isArray(details)) return undefined;
+
+  for (const item of details) {
+    if (!isObject(item)) continue;
+    if (typeof item.reason === 'string' && item.reason.length > 0) {
+      return item.reason;
+    }
+  }
+
+  return undefined;
+};
+
+const extractProviderDiagnostics = (
+  error: unknown,
+  rawMessage: string
+): {
+  providerStatus?: string;
+  providerReason?: string;
+  providerMessage?: string;
+} => {
+  let providerStatus: string | undefined;
+  let providerReason: string | undefined;
+  let providerMessage: string | undefined;
+
+  const parsedDirect = tryParseJsonObject(rawMessage);
+  const parsedDirectError = isObject(parsedDirect?.error) ? parsedDirect.error : null;
+
+  const sdkPayload = isObject(error) && typeof error.message === 'string'
+    ? tryParseJsonObject(error.message)
+    : null;
+  const sdkError = isObject(sdkPayload?.error) ? sdkPayload.error : null;
+
+  const nestedProviderPayload = tryParseJsonObject(
+    (typeof sdkError?.message === 'string' && sdkError.message) ||
+      (typeof parsedDirectError?.message === 'string' ? parsedDirectError.message : undefined)
+  );
+  const nestedProviderError = isObject(nestedProviderPayload?.error) ? nestedProviderPayload.error : null;
+
+  providerMessage =
+    (typeof nestedProviderError?.message === 'string' && nestedProviderError.message) ||
+    (typeof parsedDirectError?.message === 'string' && parsedDirectError.message) ||
+    (typeof sdkError?.message === 'string' && sdkError.message) ||
+    undefined;
+
+  providerStatus =
+    (typeof nestedProviderError?.status === 'string' && nestedProviderError.status) ||
+    (typeof parsedDirectError?.status === 'string' && parsedDirectError.status) ||
+    (typeof sdkError?.status === 'string' && sdkError.status) ||
+    undefined;
+
+  providerReason =
+    readProviderReasonFromDetails(nestedProviderError?.details) ||
+    readProviderReasonFromDetails(parsedDirectError?.details) ||
+    readProviderReasonFromDetails(sdkError?.details);
+
+  return {
+    providerStatus,
+    providerReason,
+    providerMessage,
+  };
+};
+
 export const mapProviderError = (error: unknown): ApiErrorPayload => {
   if (error instanceof RequestValidationError) {
     return {
@@ -138,56 +225,116 @@ export const mapProviderError = (error: unknown): ApiErrorPayload => {
 
   const status = readNumericStatus(error) ?? 500;
   const message = error instanceof Error ? error.message : 'Upstream request failed.';
+  const providerDiagnostics = extractProviderDiagnostics(error, message);
+  const messageForClient = providerDiagnostics.providerMessage || message;
+  const matchText = `${message}\n${providerDiagnostics.providerMessage || ''}`;
 
-  if (message.includes('does not support uploading files')) {
+  if (matchText.includes('does not support uploading files')) {
     return {
       code: 'provider_feature_not_supported',
-      message,
+      message: messageForClient,
       status: 400,
       retryable: false,
+      ...providerDiagnostics,
     };
   }
-  if (message.includes('only supported by the Gemini Developer API')) {
+  if (matchText.includes('only supported by the Gemini Developer API')) {
     return {
       code: 'provider_feature_not_supported',
-      message,
+      message: messageForClient,
       status: 400,
       retryable: false,
+      ...providerDiagnostics,
     };
   }
-  if (message.includes('No provider API keys configured.')) {
-    return { code: 'provider_key_not_configured', message, status: 503, retryable: false };
+  if (matchText.includes('No provider API keys configured.')) {
+    return {
+      code: 'provider_key_not_configured',
+      message: messageForClient,
+      status: 503,
+      retryable: false,
+      ...providerDiagnostics,
+    };
   }
-  if (message.includes('No provider API keys available.')) {
-    return { code: 'provider_key_temporarily_unavailable', message, status: 503, retryable: true };
+  if (matchText.includes('No provider API keys available.')) {
+    return {
+      code: 'provider_key_temporarily_unavailable',
+      message: messageForClient,
+      status: 503,
+      retryable: true,
+      ...providerDiagnostics,
+    };
   }
   if (status === 400) {
-    return { code: 'provider_invalid_request', message, status, retryable: false };
+    return {
+      code: 'provider_invalid_request',
+      message: messageForClient,
+      status,
+      retryable: false,
+      ...providerDiagnostics,
+    };
   }
   if (status === 401) {
-    return { code: 'provider_auth_failed', message, status, retryable: false };
+    return {
+      code: 'provider_auth_failed',
+      message: messageForClient,
+      status,
+      retryable: false,
+      ...providerDiagnostics,
+    };
   }
   if (status === 403) {
-    return { code: 'provider_forbidden', message, status, retryable: false };
+    return {
+      code: 'provider_forbidden',
+      message: messageForClient,
+      status,
+      retryable: false,
+      ...providerDiagnostics,
+    };
   }
   if (status === 404) {
-    return { code: 'provider_not_found', message, status, retryable: false };
+    return {
+      code: 'provider_not_found',
+      message: messageForClient,
+      status,
+      retryable: false,
+      ...providerDiagnostics,
+    };
   }
   if (status === 408) {
-    return { code: 'provider_timeout', message, status, retryable: true };
+    return {
+      code: 'provider_timeout',
+      message: messageForClient,
+      status,
+      retryable: true,
+      ...providerDiagnostics,
+    };
   }
   if (status === 429) {
-    return { code: 'provider_rate_limited', message, status, retryable: true };
+    return {
+      code: 'provider_rate_limited',
+      message: messageForClient,
+      status,
+      retryable: true,
+      ...providerDiagnostics,
+    };
   }
   if (status >= 500 && status <= 599) {
-    return { code: 'provider_upstream_error', message, status, retryable: true };
+    return {
+      code: 'provider_upstream_error',
+      message: messageForClient,
+      status,
+      retryable: true,
+      ...providerDiagnostics,
+    };
   }
 
   return {
     code: 'provider_unknown_error',
-    message,
+    message: messageForClient,
     status,
     retryable: status >= 500 || status === 429,
+    ...providerDiagnostics,
   };
 };
 

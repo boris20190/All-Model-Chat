@@ -4,6 +4,7 @@
 import { useCallback } from 'react';
 import { AppSettings, ChatSettings, ModelOption } from '../../../types';
 import { DEFAULT_CHAT_SETTINGS, CANVAS_SYSTEM_PROMPT, BBOX_SYSTEM_PROMPT, DEFAULT_SYSTEM_INSTRUCTION, HD_GUIDE_SYSTEM_PROMPT } from '../../../constants/appConstants';
+import { normalizeThinkingLevelForModel } from '../../../utils/appUtils';
 
 interface UseAppHandlersProps {
     setAppSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
@@ -121,16 +122,19 @@ export const useAppHandlers = ({
     }
   }, [currentChatSettings.systemInstruction, appSettings, chatState, setAppSettings, activeSessionId, setCurrentChatSettings]);
 
-  const handleSetThinkingLevel = useCallback((level: 'LOW' | 'HIGH') => {
-    setAppSettings(prev => ({ ...prev, thinkingLevel: level }));
+  const handleSetThinkingLevel = useCallback((level: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH') => {
+    const targetModelId = currentChatSettings.modelId || appSettings.modelId;
+    const compatibleLevel = normalizeThinkingLevelForModel(targetModelId, level) || 'HIGH';
+
+    setAppSettings(prev => ({ ...prev, thinkingLevel: compatibleLevel }));
     if (activeSessionId && setCurrentChatSettings) {
-        setCurrentChatSettings(prev => ({ ...prev, thinkingLevel: level }));
+        setCurrentChatSettings(prev => ({ ...prev, thinkingLevel: compatibleLevel }));
     }
     setTimeout(() => {
         const textarea = document.querySelector('textarea[aria-label="Chat message input"]') as HTMLTextAreaElement;
         if (textarea) textarea.focus();
     }, 50);
-  }, [setAppSettings, activeSessionId, setCurrentChatSettings]);
+  }, [setAppSettings, activeSessionId, setCurrentChatSettings, currentChatSettings.modelId, appSettings.modelId]);
 
   const getCurrentModelDisplayName = useCallback(() => {
     const { apiModels, isSwitchingModel } = chatState;

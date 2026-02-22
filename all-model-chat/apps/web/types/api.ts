@@ -1,6 +1,7 @@
 
 import { Part, UsageMetadata, File as GeminiFile, ChatHistoryItem } from "@google/genai";
 import { ModelOption } from './settings';
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 
 export interface GeminiService {
   uploadFile: (
@@ -24,7 +25,13 @@ export interface GeminiService {
     onPart: (part: Part) => void,
     onThoughtChunk: (chunk: string) => void,
     onError: (error: Error) => void,
-    onComplete: (usageMetadata?: UsageMetadata, groundingMetadata?: any, urlContextMetadata?: any, functionCallPart?: Part) => void,
+    onComplete: (
+      usageMetadata?: UsageMetadata,
+      groundingMetadata?: any,
+      urlContextMetadata?: any,
+      functionCallPart?: Part,
+      diagnostics?: ChatStreamCompleteDiagnostics
+    ) => void,
     role?: 'user' | 'model'
   ) => Promise<void>;
 
@@ -36,7 +43,14 @@ export interface GeminiService {
     config: any,
     abortSignal: AbortSignal,
     onError: (error: Error) => void,
-    onComplete: (parts: Part[], thoughtsText?: string, usageMetadata?: UsageMetadata, groundingMetadata?: any, urlContextMetadata?: any) => void
+    onComplete: (
+      parts: Part[],
+      thoughtsText?: string,
+      usageMetadata?: UsageMetadata,
+      groundingMetadata?: any,
+      urlContextMetadata?: any,
+      diagnostics?: ChatStreamCompleteDiagnostics
+    ) => void
   ) => Promise<void>;
 
   generateImages: (apiKey: string, modelId: string, prompt: string, aspectRatio: string, imageSize: string | undefined, abortSignal: AbortSignal) => Promise<string[]>;

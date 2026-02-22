@@ -3,6 +3,7 @@ import { Search, Plus, Minus, Loader2, AlertCircle } from 'lucide-react';
 import { ModelOption } from '../../../../types';
 import { fetchBffJson } from '../../../../services/api/bffApi';
 import { dbService } from '../../../../utils/db';
+import { areModelIdsEquivalent, parseApiKeys } from '../../../../utils/appUtils';
 
 interface QueryModelsProps {
     currentModels: ModelOption[];
@@ -10,9 +11,14 @@ interface QueryModelsProps {
     onRemove: (modelId: string) => void;
 }
 
+interface QueriedModel {
+    id: string;
+    name: string;
+}
+
 export const QueryModels: React.FC<QueryModelsProps> = ({ currentModels, onAdd, onRemove }) => {
     const [isQuerying, setIsQuerying] = useState(false);
-    const [queriedModels, setQueriedModels] = useState<any[]>([]);
+    const [queriedModels, setQueriedModels] = useState<QueriedModel[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     const handleQuery = async () => {
@@ -22,20 +28,34 @@ export const QueryModels: React.FC<QueryModelsProps> = ({ currentModels, onAdd, 
             const settings = await dbService.getAppSettings();
             const headers: Record<string, string> = {};
             if (settings?.useCustomApiConfig && settings?.apiKey) {
-                const keys = settings.apiKey.split(',').map(k => k.trim());
-                if (keys[0]) {
+                const keys = parseApiKeys(settings.apiKey);
+                if (keys.length > 0) {
                     headers['x-api-key-override'] = keys[0];
                 }
             }
 
-            const response = await fetchBffJson<{ models: any[] }>('/api/models', {
+            const response = await fetchBffJson<{ models: QueriedModel[] }>('/api/models', {
                 method: 'GET',
                 headers
             });
-            
-            setQueriedModels(response.models || []);
-        } catch (err: any) {
-            setError(err.message || 'Failed to query models');
+
+            const normalizedModels = Array.isArray(response.models)
+                ? response.models
+                    .filter((model) => typeof model?.id === 'string' && model.id.trim().length > 0)
+                    .map((model) => {
+                        const modelId = model.id.trim();
+                        return {
+                            id: modelId,
+                            name: typeof model.name === 'string' && model.name.trim().length > 0
+                                ? model.name.trim()
+                                : modelId,
+                        };
+                    })
+                : [];
+
+            setQueriedModels(normalizedModels);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to query models');
         } finally {
             setIsQuerying(false);
         }
@@ -84,7 +104,7 @@ export const QueryModels: React.FC<QueryModelsProps> = ({ currentModels, onAdd, 
                     </div>
                 ) : (
                     queriedModels.map((m) => {
-                        const isAdded = currentModels.some(cm => cm.id === m.id);
+                        const isAdded = currentModels.some(cm => areModelIdsEquivalent(cm.id, m.id));
                         return (
                             <div key={m.id} className="flex items-center justify-between p-2 rounded bg-[var(--theme-bg-primary)] border border-[var(--theme-border-secondary)] group hover:border-[var(--theme-border-focus)] transition-colors">
                                 <div className="min-w-0 flex-1 mr-2">
@@ -92,7 +112,7 @@ export const QueryModels: React.FC<QueryModelsProps> = ({ currentModels, onAdd, 
                                     <div className="text-[10px] font-mono text-[var(--theme-text-tertiary)] truncate" title={m.id}>{m.id}</div>
                                 </div>
                                 <button
-                                    onClick={() => isAdded ? onRemove(m.id) : onAdd({ id: m.id, name: m.name, isPinned: true })}
+                                    onClick={() => isAdded ? onRemove(m.id) : onAdd({ id: m.id.trim(), name: m.name.trim(), isPinned: true })}
                                     className={`flex-shrink-0 p-1.5 rounded transition-colors ${
                                         isAdded 
                                         ? 'text-red-400 hover:bg-red-400/10' 

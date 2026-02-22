@@ -1,7 +1,12 @@
 
-import React, { useCallback, Dispatch, SetStateAction } from 'react';
+import React, { useCallback } from 'react';
 import { AppSettings, ChatMessage, ChatSettings as IndividualChatSettings, UploadedFile, ProjectContext } from '../../../types';
-import { createChatHistoryForApi, isGemini3Model, logService } from '../../../utils/appUtils';
+import {
+    createChatHistoryForApi,
+    getFastThinkingLevelForModel,
+    isGemini3Model,
+    logService
+} from '../../../utils/appUtils';
 import { buildGenerationConfig } from '../../../services/api/baseApi';
 import { geminiServiceInstance } from '../../../services/geminiService';
 import { isLikelyHtml } from '../../../utils/codeUtils';
@@ -9,6 +14,7 @@ import { GetStreamHandlers } from '../types';
 import { ContentPart } from '../../../types/chat';
 import { generateProjectContextSystemPrompt } from '../../useFolderToolExecutor';
 import { readProjectFile } from '../../../utils/folderImportUtils';
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 
 interface UseApiInteractionProps {
     appSettings: AppSettings;
@@ -128,7 +134,8 @@ export const useApiInteraction = ({
             projectContext?.fileTree, // Pass file tree to enable read_file tool
         );
 
-        const shouldAutoContinueOnEmpty = !isContinueMode && activeModelId.includes('gemini-3') && activeModelId.includes('flash');
+        const shouldAutoContinueOnEmpty =
+            !isContinueMode && getFastThinkingLevelForModel(activeModelId) === 'MINIMAL';
 
         const { streamOnError, streamOnComplete, streamOnPart, onThoughtChunk } = getStreamHandlers(
             finalSessionId,
@@ -161,7 +168,8 @@ export const useApiInteraction = ({
             usageMetadata: any,
             groundingMetadata: any,
             urlContextMetadata: any,
-            functionCallPart?: any // Part object containing functionCall and thoughtSignature
+            functionCallPart?: any, // Part object containing functionCall and thoughtSignature
+            diagnostics?: ChatStreamCompleteDiagnostics
         ) => {
             const normalizedFunctionCallPart = (() => {
                 if (!functionCallPart) return functionCallPart;
@@ -237,11 +245,11 @@ export const useApiInteraction = ({
                     // Continue with error message in response
                     const errorPart = { text: `\n\n[Error reading file: ${error instanceof Error ? error.message : 'Unknown error'}]` };
                     streamOnPart(errorPart);
-                    streamOnComplete(usageMetadata, groundingMetadata, urlContextMetadata);
+                    streamOnComplete(usageMetadata, groundingMetadata, urlContextMetadata, diagnostics);
                 }
             } else {
                 // No function call, complete normally
-                streamOnComplete(usageMetadata, groundingMetadata, urlContextMetadata);
+                streamOnComplete(usageMetadata, groundingMetadata, urlContextMetadata, diagnostics);
             }
         };
 
@@ -268,10 +276,10 @@ export const useApiInteraction = ({
                 config,
                 newAbortController.signal,
                 streamOnError,
-                (parts, thoughts, usage, grounding) => {
+                (parts, thoughts, usage, grounding, urlContextMetadata, diagnostics) => {
                     for (const part of parts) streamOnPart(part);
                     if (thoughts) onThoughtChunk(thoughts);
-                    streamOnComplete(usage, grounding);
+                    streamOnComplete(usage, grounding, urlContextMetadata, diagnostics);
                 }
             );
         }

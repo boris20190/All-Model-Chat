@@ -4,7 +4,12 @@ import { logService } from "../logService";
 import { dbService } from '../../utils/db';
 import { DEEP_SEARCH_SYSTEM_PROMPT } from "../../constants/promptConstants";
 import { SafetySetting, MediaResolution } from "../../types/settings";
-import { isGemini3Model } from "../../utils/appUtils";
+import {
+    isGemini3Model,
+    normalizeModelIdForComparison,
+    normalizeThinkingLevelForModel,
+    sanitizeApiKey
+} from "../../utils/appUtils";
 
 
 const POLLING_INTERVAL_MS = 2000; // 2 seconds
@@ -14,17 +19,11 @@ export { POLLING_INTERVAL_MS, MAX_POLLING_DURATION_MS };
 
 export const getClient = (apiKey: string, baseUrl?: string | null, httpOptions?: any): GoogleGenAI => {
     try {
-        // Sanitize the API key to replace common non-ASCII characters that might
-        // be introduced by copy-pasting from rich text editors. This prevents
-        // "Failed to execute 'append' on 'Headers': Invalid character" errors.
-        const sanitizedApiKey = apiKey
-            .replace(/[\u2013\u2014]/g, '-') // en-dash, em-dash to hyphen
-            .replace(/[\u2018\u2019]/g, "'") // smart single quotes to apostrophe
-            .replace(/[\u201C\u201D]/g, '"') // smart double quotes to quote
-            .replace(/[\u00A0]/g, ' '); // non-breaking space to regular space
+        // Normalize key text copied from rich editors (smart quotes / zero-width chars).
+        const sanitizedApiKey = sanitizeApiKey(apiKey);
 
         if (apiKey !== sanitizedApiKey) {
-            logService.warn("API key was sanitized. Non-ASCII characters were replaced.");
+            logService.warn("API key was sanitized before request.");
         }
 
         const config: any = { apiKey: sanitizedApiKey };
@@ -165,20 +164,28 @@ export const buildGenerationConfig = (
         delete generationConfig.systemInstruction;
     }
 
+    const compatibleThinkingLevel = normalizeThinkingLevelForModel(modelId, thinkingLevel);
+    if (thinkingLevel && compatibleThinkingLevel && thinkingLevel !== compatibleThinkingLevel) {
+        logService.warn(
+            `Adjusted incompatible thinkingLevel from ${thinkingLevel} to ${compatibleThinkingLevel} for model ${modelId}.`
+        );
+    }
+
     // Robust check for Gemini 3
     if (isGemini3) {
         generationConfig.thinkingConfig = {
             includeThoughts: true, // Always capture thoughts in data; UI toggles visibility
         };
 
-        const isGemini31ProPreview = modelId.includes('gemini-3.1-pro-preview');
+        const normalizedModelId = normalizeModelIdForComparison(modelId);
+        const isGemini31ProPreview = normalizedModelId.includes('gemini-3.1-pro-preview');
 
         if (isGemini31ProPreview) {
-            generationConfig.thinkingConfig.thinkingLevel = thinkingLevel || 'HIGH';
+            generationConfig.thinkingConfig.thinkingLevel = compatibleThinkingLevel || 'HIGH';
         } else if (thinkingBudget > 0) {
             generationConfig.thinkingConfig.thinkingBudget = thinkingBudget;
         } else {
-            generationConfig.thinkingConfig.thinkingLevel = thinkingLevel || 'HIGH';
+            generationConfig.thinkingConfig.thinkingLevel = compatibleThinkingLevel || 'HIGH';
         }
     } else {
         const modelSupportsThinking = [

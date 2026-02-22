@@ -6,7 +6,7 @@ import { getModelIcon } from '../../../shared/ModelPicker';
 interface ModelListEditorRowProps {
     model: ModelOption;
     index: number;
-    onUpdate: (index: number, field: keyof ModelOption, value: any) => void;
+    onUpdate: (index: number, field: keyof ModelOption, value: ModelOption[keyof ModelOption]) => void;
     onDelete: (index: number) => void;
 }
 
