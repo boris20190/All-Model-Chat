@@ -26,6 +26,8 @@ export interface ChatHistoryTurn {
   parts: Part[];
 }
 
+export type ChatToolMode = 'builtin' | 'custom' | 'none';
+
 export interface ChatStreamRequestPayload {
   model: string;
   history: ChatHistoryTurn[];
@@ -33,6 +35,14 @@ export interface ChatStreamRequestPayload {
   config?: unknown;
   role: ChatRole;
   apiKeyOverride?: string;
+  toolMode?: ChatToolMode;
+  mcp?: {
+    enabledServerIds?: string[];
+  };
+  webGrounding?: {
+    required?: boolean;
+    policy?: 'off' | 'warn';
+  };
 }
 
 export interface ChatStreamMetaEventPayload {
@@ -74,6 +84,27 @@ export interface ChatStreamCompleteDiagnostics {
     providerStatus?: string;
     providerReason?: string;
     providerMessage?: string;
+  };
+  mcp?: {
+    requestedServerIds?: string[];
+    attachedServerIds?: string[];
+    skipped?: Array<{
+      id: string;
+      reason: string;
+    }>;
+    degraded?: boolean;
+  };
+  webGrounding?: {
+    required?: boolean;
+    policy?: 'off' | 'warn';
+    satisfied?: boolean;
+    reason?: 'not_required' | 'policy_off' | 'search_evidence_found' | 'search_evidence_missing';
+    evidence?: {
+      webSearchQueries?: number;
+      webGroundingChunks?: number;
+      citations?: number;
+      urlContextUrls?: number;
+    };
   };
 }
 
@@ -186,4 +217,17 @@ export interface FileListResponse<TFile = unknown> {
 export interface FileDeleteResponse {
   ok: boolean;
   name: string;
+}
+
+export interface McpServerStatus {
+  id: string;
+  name: string;
+  available: boolean;
+  lastCheckedAt?: string;
+  statusMessage?: string;
+}
+
+export interface McpServersResponse {
+  enabled: boolean;
+  servers: McpServerStatus[];
 }

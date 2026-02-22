@@ -1,7 +1,14 @@
 
 import { Part, UsageMetadata, File as GeminiFile, ChatHistoryItem } from "@google/genai";
 import { ModelOption } from './settings';
-import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
+import type { ChatStreamCompleteDiagnostics, ChatToolMode } from '@all-model-chat/shared-api';
+
+export interface ChatRequestToolConfig {
+  toolMode?: ChatToolMode;
+  mcpEnabledServerIds?: string[];
+  webGroundingRequired?: boolean;
+  webGroundingPolicy?: 'off' | 'warn';
+}
 
 export interface GeminiService {
   uploadFile: (
@@ -32,7 +39,8 @@ export interface GeminiService {
       functionCallPart?: Part,
       diagnostics?: ChatStreamCompleteDiagnostics
     ) => void,
-    role?: 'user' | 'model'
+    role?: 'user' | 'model',
+    toolConfig?: ChatRequestToolConfig
   ) => Promise<void>;
 
   sendMessageNonStream: (
@@ -50,7 +58,8 @@ export interface GeminiService {
       groundingMetadata?: any,
       urlContextMetadata?: any,
       diagnostics?: ChatStreamCompleteDiagnostics
-    ) => void
+    ) => void,
+    toolConfig?: ChatRequestToolConfig
   ) => Promise<void>;
 
   generateImages: (apiKey: string, modelId: string, prompt: string, aspectRatio: string, imageSize: string | undefined, abortSignal: AbortSignal) => Promise<string[]>;

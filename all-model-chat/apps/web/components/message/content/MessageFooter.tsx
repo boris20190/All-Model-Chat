@@ -14,6 +14,15 @@ interface MessageFooterProps {
 
 export const MessageFooter: React.FC<MessageFooterProps> = ({ message, t, onSuggestionClick }) => {
     const { audioSrc, audioAutoplay, suggestions, isGeneratingSuggestions, role, generationStartTime } = message;
+    const webGrounding = message.webGrounding;
+    const showWebGroundingStatus = role === 'model' && !message.isLoading && webGrounding?.required === true;
+    const countsTemplate = t('web_grounding_counts');
+    const webEvidenceCounts = countsTemplate
+        .replace('{queries}', String(webGrounding?.evidence?.webSearchQueries ?? 0))
+        .replace('{chunks}', String(webGrounding?.evidence?.webGroundingChunks ?? 0))
+        .replace('{citations}', String(webGrounding?.evidence?.citations ?? 0))
+        .replace('{urls}', String(webGrounding?.evidence?.urlContextUrls ?? 0));
+    const webGroundingIsSatisfied = webGrounding?.satisfied === true;
 
     return (
         <>
@@ -29,6 +38,22 @@ export const MessageFooter: React.FC<MessageFooterProps> = ({ message, t, onSugg
                     t={t} 
                     hideTimer={message.isLoading}
                 />
+            )}
+
+            {showWebGroundingStatus && (
+                <div
+                    className={`mt-2 inline-flex items-center gap-2 text-[10px] sm:text-[11px] px-2 py-1 rounded-md border ${
+                        webGroundingIsSatisfied
+                            ? 'text-green-700 bg-green-500/10 border-green-500/20'
+                            : 'text-amber-700 bg-amber-500/10 border-amber-500/20'
+                    }`}
+                    title={webGrounding?.reason || undefined}
+                >
+                    <span className="font-semibold">
+                        {webGroundingIsSatisfied ? t('web_grounding_verified') : t('web_grounding_missing')}
+                    </span>
+                    <span className="opacity-80 font-mono">{webEvidenceCounts}</span>
+                </div>
             )}
 
             {(suggestions && suggestions.length > 0) && (

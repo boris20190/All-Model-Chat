@@ -1,6 +1,7 @@
 
 import { ChatMessage, UploadedFile, ChatSettings } from '../../types';
 import { Part, UsageMetadata } from '@google/genai';
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 import { generateUniqueId, calculateTokenStats, createMessage, createUploadedFileFromBase64, getTranslator } from '../../utils/appUtils';
 import { isToolMessage } from './utils';
 import { SUPPORTED_GENERATED_MIME_TYPES } from '../../constants/fileConstants';
@@ -215,6 +216,7 @@ export const finalizeMessages = (
     usageMetadata?: UsageMetadata,
     groundingMetadata?: any,
     urlContextMetadata?: any,
+    diagnostics?: ChatStreamCompleteDiagnostics,
     isAborted?: boolean,
     emptyResponseErrorMessage?: string
 ): { updatedMessages: ChatMessage[], completedMessageForNotification: ChatMessage | null } => {
@@ -248,6 +250,7 @@ export const finalizeMessages = (
                 thinkingTimeMs: thinkingTime,
                 groundingMetadata: isLastMessageOfRun ? groundingMetadata : undefined,
                 urlContextMetadata: isLastMessageOfRun ? urlContextMetadata : undefined,
+                webGrounding: isLastMessageOfRun ? diagnostics?.webGrounding : undefined,
                 promptTokens: isLastMessageOfRun ? promptTokens : undefined,
                 completionTokens: isLastMessageOfRun ? completionTokens : undefined,
                 totalTokens: isLastMessageOfRun ? totalTokens : undefined,

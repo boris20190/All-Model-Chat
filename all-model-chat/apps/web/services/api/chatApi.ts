@@ -7,11 +7,13 @@ import type {
     ChatStreamMetaEventPayload,
     ChatStreamRequestPayload,
 } from '@all-model-chat/shared-api';
+import type { ChatRequestToolConfig } from '../../types/api';
 import { ThoughtSupportingPart } from '../../types';
 import { logService } from "../logService";
 import { getConfiguredApiClient } from "./baseApi";
 import { parseBffErrorResponse, resolveBffEndpoint } from './bffApi';
 import { BACKEND_MANAGED_KEY_SENTINEL } from '../../utils/apiUtils';
+import { normalizeWebGroundingDiagnostics } from '../../utils/webGrounding.js';
 
 interface ParsedSseEvent {
     eventName: string;
@@ -234,6 +236,10 @@ const normalizeCompleteDiagnostics = (payload: unknown): ChatStreamCompleteDiagn
     const streamErrorSource = isObjectRecord(diagnosticsSource.streamError)
         ? diagnosticsSource.streamError
         : undefined;
+    const mcpSource = isObjectRecord(diagnosticsSource.mcp)
+        ? diagnosticsSource.mcp
+        : undefined;
+    const webGrounding = normalizeWebGroundingDiagnostics(diagnosticsSource.webGrounding);
 
     const diagnostics: ChatStreamCompleteDiagnostics = {
         finishReason: typeof diagnosticsSource.finishReason === 'string' ? diagnosticsSource.finishReason : undefined,
@@ -292,6 +298,26 @@ const normalizeCompleteDiagnostics = (payload: unknown): ChatStreamCompleteDiagn
                     : undefined,
             }
             : undefined,
+        mcp: mcpSource
+            ? {
+                requestedServerIds: Array.isArray(mcpSource.requestedServerIds)
+                    ? mcpSource.requestedServerIds.filter((entry): entry is string => typeof entry === 'string')
+                    : undefined,
+                attachedServerIds: Array.isArray(mcpSource.attachedServerIds)
+                    ? mcpSource.attachedServerIds.filter((entry): entry is string => typeof entry === 'string')
+                    : undefined,
+                skipped: Array.isArray(mcpSource.skipped)
+                    ? mcpSource.skipped
+                        .filter((entry): entry is Record<string, unknown> => isObjectRecord(entry))
+                        .map((entry) => ({
+                            id: typeof entry.id === 'string' ? entry.id : 'unknown',
+                            reason: typeof entry.reason === 'string' ? entry.reason : 'unknown',
+                        }))
+                    : undefined,
+                degraded: typeof mcpSource.degraded === 'boolean' ? mcpSource.degraded : undefined,
+            }
+            : undefined,
+        webGrounding,
     };
 
     const hasAnyDiagnostics = Object.values(diagnostics).some((value) => value !== undefined);
@@ -416,7 +442,8 @@ export const sendStatelessMessageStreamApi = async (
         functionCallPart?: Part,
         diagnostics?: ChatStreamCompleteDiagnostics
     ) => void,
-    role: 'user' | 'model' = 'user'
+    role: 'user' | 'model' = 'user',
+    toolConfig?: ChatRequestToolConfig
 ): Promise<void> => {
     logService.info(`Sending message via BFF /api/chat/stream for ${modelId} (Role: ${role})`);
     let finalUsageMetadata: UsageMetadata | undefined = undefined;
@@ -447,6 +474,16 @@ export const sendStatelessMessageStreamApi = async (
             config,
             role,
             apiKeyOverride: apiKey !== BACKEND_MANAGED_KEY_SENTINEL ? apiKey : undefined,
+            toolMode: toolConfig?.toolMode,
+            mcp: toolConfig?.mcpEnabledServerIds?.length
+                ? { enabledServerIds: [...toolConfig.mcpEnabledServerIds] }
+                : undefined,
+            webGrounding: toolConfig?.webGroundingRequired
+                ? {
+                    required: true,
+                    policy: toolConfig.webGroundingPolicy ?? 'warn',
+                }
+                : undefined,
         };
 
         const response = await fetch(endpoint, {
@@ -589,7 +626,8 @@ export const sendStatelessMessageNonStreamApi = async (
         groundingMetadata?: any,
         urlContextMetadata?: any,
         diagnostics?: ChatStreamCompleteDiagnostics
-    ) => void
+    ) => void,
+    toolConfig?: ChatRequestToolConfig
 ): Promise<void> => {
     logService.info(`Sending message via stateless generateContent (non-stream) for model ${modelId}`);
 
@@ -620,7 +658,9 @@ export const sendStatelessMessageNonStreamApi = async (
                         urlContextMetadata,
                         diagnostics
                     );
-                }
+                },
+                'user',
+                toolConfig
             );
             return;
         }

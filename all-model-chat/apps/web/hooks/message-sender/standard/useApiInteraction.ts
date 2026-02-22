@@ -15,6 +15,7 @@ import { ContentPart } from '../../../types/chat';
 import { generateProjectContextSystemPrompt } from '../../useFolderToolExecutor';
 import { readProjectFile } from '../../../utils/folderImportUtils';
 import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
+import { buildWebGroundingRequest, resolveToolMode } from '../../../utils/toolMode.js';
 import {
     appendToolRoundToHistory,
     createRollingHistory,
@@ -116,6 +117,14 @@ export const useApiInteraction = ({
         const historyForChat = await createChatHistoryForApi(baseMessagesForApi, shouldStripThinking);
         const rollingHistory = createRollingHistory(historyForChat as any[], finalRole, finalParts as any[]);
         let toolRoundCount = 0;
+        const resolvedToolMode = resolveToolMode(sessionToUpdate);
+        const webGroundingRequest = buildWebGroundingRequest(sessionToUpdate, 'warn');
+        const requestToolConfig = {
+            toolMode: resolvedToolMode,
+            mcpEnabledServerIds: sessionToUpdate.enabledMcpServerIds || [],
+            webGroundingRequired: webGroundingRequest?.required,
+            webGroundingPolicy: webGroundingRequest?.policy,
+        };
 
         // Prepare system instruction - inject project context if available
         let effectiveSystemInstruction = sessionToUpdate.systemInstruction;
@@ -140,6 +149,8 @@ export const useApiInteraction = ({
             sessionToUpdate.safetySettings,
             sessionToUpdate.mediaResolution,
             projectContext?.fileTree, // Pass file tree to enable read_file tool
+            sessionToUpdate.toolMode,
+            sessionToUpdate.enabledMcpServerIds,
         );
 
         const shouldAutoContinueOnEmpty =
@@ -252,7 +263,8 @@ export const useApiInteraction = ({
                         onThoughtChunk,
                         streamOnError,
                         handleFunctionCallResponse, // Recursive for multi-turn
-                        'model' // Continue from model
+                        'model', // Continue from model
+                        requestToolConfig
                     );
                 } catch (error) {
                     logService.error('Function call execution failed:', error);
@@ -279,7 +291,8 @@ export const useApiInteraction = ({
                 onThoughtChunk,
                 streamOnError,
                 handleFunctionCallResponse,
-                finalRole
+                finalRole,
+                requestToolConfig
             );
         } else {
             await geminiServiceInstance.sendMessageNonStream(
@@ -294,7 +307,8 @@ export const useApiInteraction = ({
                     for (const part of parts) streamOnPart(part);
                     if (thoughts) onThoughtChunk(thoughts);
                     streamOnComplete(usage, grounding, urlContextMetadata, diagnostics);
-                }
+                },
+                requestToolConfig
             );
         }
     }, [appSettings, messages, getStreamHandlers, handleGenerateCanvas, setSessionLoading, activeJobs, projectContext, onAutoContinue]);

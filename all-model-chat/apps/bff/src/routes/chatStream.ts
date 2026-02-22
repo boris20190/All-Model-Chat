@@ -1,10 +1,18 @@
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { GoogleGenAI, Part, UsageMetadata } from '@google/genai';
 import { GeminiProviderClient } from '../providers/geminiClient.js';
-import type { ChatHistoryTurn, ChatStreamRequestPayload } from '@all-model-chat/shared-api';
+import type { ChatHistoryTurn, ChatStreamRequestPayload, ChatToolMode } from '@all-model-chat/shared-api';
 import type { ChatRole } from '@all-model-chat/shared-types';
 import { mapProviderError, sanitizeApiKey } from './routeCommon.js';
 import { normalizeThinkingLevelForModel, type ThinkingLevel } from '../utils/thinking.js';
+import type { BffConfig } from '../config/env.js';
+import { loadMcpRuntimeConfig } from '../mcp/config.js';
+import { attachMcpCallableTools } from '../mcp/clientManager.js';
+import {
+  buildWebGroundingDiagnostics,
+  collectWebGroundingEvidence,
+  resolveWebGroundingRequirement,
+} from './webGrounding.js';
 
 interface ValidationErrorShape {
   code: string;
@@ -200,6 +208,113 @@ const normalizeHistory = (input: unknown): ChatHistoryTurn[] => {
   });
 };
 
+const parseToolMode = (value: unknown): ChatToolMode | undefined => {
+  if (value === undefined) return undefined;
+  if (value !== 'builtin' && value !== 'custom' && value !== 'none') {
+    throw new ValidationError({
+      code: 'invalid_request',
+      message: '`toolMode` must be one of "builtin", "custom", or "none".',
+      status: 400,
+    });
+  }
+  return value;
+};
+
+const parseEnabledServerIds = (value: unknown): string[] | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new ValidationError({
+      code: 'invalid_request',
+      message: '`mcp.enabledServerIds` must be an array of strings.',
+      status: 400,
+    });
+  }
+
+  const deduped = new Set<string>();
+
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (typeof entry !== 'string') {
+      throw new ValidationError({
+        code: 'invalid_request',
+        message: `mcp.enabledServerIds[${index}] must be a string.`,
+        status: 400,
+      });
+    }
+
+    const normalized = entry.trim();
+    if (!normalized) continue;
+    deduped.add(normalized);
+  }
+
+  return [...deduped];
+};
+
+const parseWebGrounding = (value: unknown): ChatStreamRequestPayload['webGrounding'] | undefined => {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) {
+    throw new ValidationError({
+      code: 'invalid_request',
+      message: '`webGrounding` must be an object.',
+      status: 400,
+    });
+  }
+
+  const requiredRaw = value.required;
+  const policyRaw = value.policy;
+
+  if (requiredRaw !== undefined && typeof requiredRaw !== 'boolean') {
+    throw new ValidationError({
+      code: 'invalid_request',
+      message: '`webGrounding.required` must be a boolean.',
+      status: 400,
+    });
+  }
+
+  if (policyRaw !== undefined && policyRaw !== 'off' && policyRaw !== 'warn') {
+    throw new ValidationError({
+      code: 'invalid_request',
+      message: '`webGrounding.policy` must be one of "off" or "warn".',
+      status: 400,
+    });
+  }
+
+  const parsed: NonNullable<ChatStreamRequestPayload['webGrounding']> = {};
+  if (typeof requiredRaw === 'boolean') {
+    parsed.required = requiredRaw;
+  }
+  if (policyRaw === 'off' || policyRaw === 'warn') {
+    parsed.policy = policyRaw;
+  }
+
+  if (parsed.required === undefined && parsed.policy === undefined) {
+    return undefined;
+  }
+
+  return parsed;
+};
+
+const isBuiltinToolEntry = (tool: unknown): boolean => {
+  if (!isObject(tool)) return false;
+  return 'googleSearch' in tool || 'codeExecution' in tool || 'urlContext' in tool;
+};
+
+const isFunctionDeclarationEntry = (tool: unknown): boolean => {
+  if (!isObject(tool)) return false;
+  return Array.isArray(tool.functionDeclarations);
+};
+
+const inferToolModeFromConfig = (rawConfig: unknown): ChatToolMode => {
+  if (!isObject(rawConfig) || !Array.isArray(rawConfig.tools)) {
+    return 'none';
+  }
+
+  const tools = rawConfig.tools;
+  if (tools.some((tool) => isBuiltinToolEntry(tool))) return 'builtin';
+  if (tools.some((tool) => isFunctionDeclarationEntry(tool))) return 'custom';
+  return 'none';
+};
+
 const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
   if (!rawBody.trim()) {
     throw new ValidationError({
@@ -250,6 +365,10 @@ const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
   }
   const history = normalizeHistory(parsed.history);
   const parts = normalizePartArray(parsed.parts, '`parts`', false);
+  const toolMode = parseToolMode(parsed.toolMode);
+  const mcpPayload = isObject(parsed.mcp) ? parsed.mcp : undefined;
+  const enabledServerIds = parseEnabledServerIds(mcpPayload?.enabledServerIds);
+  const webGrounding = parseWebGrounding(parsed.webGrounding);
 
   if (history.length === 0 && parts.length === 0) {
     throw new ValidationError({
@@ -266,6 +385,9 @@ const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
     config: parsed.config,
     role,
     apiKeyOverride,
+    toolMode,
+    mcp: enabledServerIds ? { enabledServerIds } : undefined,
+    webGrounding,
   };
 };
 
@@ -285,7 +407,8 @@ const mapValidationError = (error: unknown): ValidationErrorShape => {
 export const handleChatStreamRoute = async (
   request: IncomingMessage,
   response: ServerResponse,
-  geminiProviderClient: GeminiProviderClient
+  geminiProviderClient: GeminiProviderClient,
+  bffConfig: BffConfig
 ): Promise<void> => {
   let payload: ChatStreamRequestPayload;
   try {
@@ -348,145 +471,238 @@ export const handleChatStreamRoute = async (
       let hadCandidate = false;
       let hadCandidateParts = false;
       let hadThoughtChunk = false;
-      let effectiveConfig: unknown = payload.config;
+      const requestedMcpServerIds = payload.mcp?.enabledServerIds
+        ? [...payload.mcp.enabledServerIds]
+        : [];
+      const finalToolMode: ChatToolMode = payload.toolMode || inferToolModeFromConfig(payload.config);
+      const mcpDiagnostics =
+        requestedMcpServerIds.length > 0
+          ? {
+              requestedServerIds: [...requestedMcpServerIds],
+              attachedServerIds: [] as string[],
+              skipped: [] as Array<{ id: string; reason: string }>,
+              degraded: false,
+            }
+          : undefined;
+      let closeMcpTools = async (): Promise<void> => undefined;
 
-      if (isObject(payload.config)) {
-        const configClone: Record<string, unknown> = { ...(payload.config as Record<string, unknown>) };
-        const rawThinkingConfig = configClone.thinkingConfig;
-        if (isObject(rawThinkingConfig)) {
-          const thinkingConfigClone: Record<string, unknown> = { ...rawThinkingConfig };
-          const rawThinkingLevel =
-            typeof thinkingConfigClone.thinkingLevel === 'string'
-              ? (thinkingConfigClone.thinkingLevel as ThinkingLevel)
-              : undefined;
+      const configClone: Record<string, unknown> = isObject(payload.config)
+        ? { ...(payload.config as Record<string, unknown>) }
+        : {};
+      const rawThinkingConfig = configClone.thinkingConfig;
+      if (isObject(rawThinkingConfig)) {
+        const thinkingConfigClone: Record<string, unknown> = { ...rawThinkingConfig };
+        const rawThinkingLevel =
+          typeof thinkingConfigClone.thinkingLevel === 'string'
+            ? (thinkingConfigClone.thinkingLevel as ThinkingLevel)
+            : undefined;
 
-          const normalizedThinkingLevel = normalizeThinkingLevelForModel(payload.model, rawThinkingLevel);
-          if (
-            rawThinkingLevel &&
-            normalizedThinkingLevel &&
-            rawThinkingLevel !== normalizedThinkingLevel
-          ) {
-            thinkingConfigClone.thinkingLevel = normalizedThinkingLevel;
-          }
-
-          configClone.thinkingConfig = thinkingConfigClone;
+        const normalizedThinkingLevel = normalizeThinkingLevelForModel(payload.model, rawThinkingLevel);
+        if (rawThinkingLevel && normalizedThinkingLevel && rawThinkingLevel !== normalizedThinkingLevel) {
+          thinkingConfigClone.thinkingLevel = normalizedThinkingLevel;
         }
 
-        effectiveConfig = configClone;
+        configClone.thinkingConfig = thinkingConfigClone;
       }
 
-      const result = await client.models.generateContentStream({
-        model: payload.model,
-        contents,
-        config: effectiveConfig as any,
+      const rawTools = Array.isArray(configClone.tools) ? [...configClone.tools] : [];
+      let normalizedTools = rawTools;
+
+      if (finalToolMode === 'builtin') {
+        normalizedTools = rawTools.filter((tool) => isBuiltinToolEntry(tool));
+      } else if (finalToolMode === 'custom') {
+        normalizedTools = rawTools.filter((tool) => isFunctionDeclarationEntry(tool));
+      } else if (finalToolMode === 'none') {
+        normalizedTools = [];
+      }
+
+      if (requestedMcpServerIds.length > 0 && finalToolMode !== 'custom') {
+        requestedMcpServerIds.forEach((serverId) => {
+          mcpDiagnostics?.skipped.push({
+            id: serverId,
+            reason: `Ignored because toolMode=${finalToolMode}. MCP servers attach only in custom mode.`,
+          });
+        });
+      }
+
+      if (finalToolMode === 'custom' && requestedMcpServerIds.length > 0) {
+        if (normalizedTools.some((tool) => isFunctionDeclarationEntry(tool))) {
+          mcpDiagnostics?.skipped.push({
+            id: 'local-function-declarations',
+            reason:
+              'Basic FunctionDeclarations were removed because MCP callable tools cannot be mixed with them in automatic function-calling mode.',
+          });
+          normalizedTools = normalizedTools.filter((tool) => !isFunctionDeclarationEntry(tool));
+        }
+
+        try {
+          const runtime = await loadMcpRuntimeConfig(bffConfig);
+          if (runtime.warnings.length > 0) {
+            runtime.warnings.forEach((warning, index) => {
+              mcpDiagnostics?.skipped.push({
+                id: `config-warning-${index + 1}`,
+                reason: warning,
+              });
+            });
+          }
+
+          const attachment = await attachMcpCallableTools({
+            runtime,
+            requestedServerIds: requestedMcpServerIds,
+            existingTools: normalizedTools,
+          });
+
+          normalizedTools = [...normalizedTools, ...attachment.tools];
+          closeMcpTools = attachment.close;
+
+          if (mcpDiagnostics) {
+            mcpDiagnostics.attachedServerIds = [...attachment.attachedServerIds];
+            mcpDiagnostics.skipped.push(...attachment.skipped);
+          }
+        } catch (error) {
+          mcpDiagnostics?.skipped.push({
+            id: 'mcp-attach',
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      if (normalizedTools.length > 0) {
+        configClone.tools = normalizedTools;
+      } else {
+        delete configClone.tools;
+      }
+
+      if (mcpDiagnostics) {
+        mcpDiagnostics.degraded =
+          mcpDiagnostics.requestedServerIds.length > 0 &&
+          mcpDiagnostics.attachedServerIds.length === 0;
+      }
+
+      const webGroundingRequirement = resolveWebGroundingRequirement({
+        payload,
+        finalToolMode,
+        normalizedTools,
       });
 
-      for await (const chunkResponse of result) {
-        if (abortController.signal.aborted) {
-          break;
-        }
+      const effectiveConfig: unknown = configClone;
 
-        if (typeof chunkResponse.responseId === 'string' && chunkResponse.responseId.length > 0) {
-          finalResponseId = chunkResponse.responseId;
-        }
+      try {
+        const result = await client.models.generateContentStream({
+          model: payload.model,
+          contents,
+          config: effectiveConfig as any,
+        });
 
-        if (typeof chunkResponse.modelVersion === 'string' && chunkResponse.modelVersion.length > 0) {
-          finalModelVersion = chunkResponse.modelVersion;
-        }
+        for await (const chunkResponse of result) {
+          if (abortController.signal.aborted) {
+            break;
+          }
 
-        if (chunkResponse.promptFeedback) {
-          finalPromptFeedback = {
-            blockReason: chunkResponse.promptFeedback.blockReason,
-            blockReasonMessage: chunkResponse.promptFeedback.blockReasonMessage,
-            safetyRatings: Array.isArray(chunkResponse.promptFeedback.safetyRatings)
-              ? [...chunkResponse.promptFeedback.safetyRatings]
-              : undefined,
-          };
-        }
+          if (typeof chunkResponse.responseId === 'string' && chunkResponse.responseId.length > 0) {
+            finalResponseId = chunkResponse.responseId;
+          }
 
-        if (chunkResponse.usageMetadata) {
-          finalUsageMetadata = chunkResponse.usageMetadata;
-        }
+          if (typeof chunkResponse.modelVersion === 'string' && chunkResponse.modelVersion.length > 0) {
+            finalModelVersion = chunkResponse.modelVersion;
+          }
 
-        const candidate = chunkResponse.candidates?.[0];
-        if (!candidate) {
-          continue;
-        }
-        hadCandidate = true;
+          if (chunkResponse.promptFeedback) {
+            finalPromptFeedback = {
+              blockReason: chunkResponse.promptFeedback.blockReason,
+              blockReasonMessage: chunkResponse.promptFeedback.blockReasonMessage,
+              safetyRatings: Array.isArray(chunkResponse.promptFeedback.safetyRatings)
+                ? [...chunkResponse.promptFeedback.safetyRatings]
+                : undefined,
+            };
+          }
 
-        if (candidate.finishReason) {
-          finalFinishReason = String(candidate.finishReason);
-        }
+          if (chunkResponse.usageMetadata) {
+            finalUsageMetadata = chunkResponse.usageMetadata;
+          }
 
-        if (typeof candidate.finishMessage === 'string' && candidate.finishMessage.length > 0) {
-          finalFinishMessage = candidate.finishMessage;
-        }
+          const candidate = chunkResponse.candidates?.[0];
+          if (!candidate) {
+            continue;
+          }
+          hadCandidate = true;
 
-        if (Array.isArray(candidate.safetyRatings)) {
-          finalCandidateSafetyRatings = [...candidate.safetyRatings];
-        }
+          if (candidate.finishReason) {
+            finalFinishReason = String(candidate.finishReason);
+          }
 
-        if (candidate.groundingMetadata) {
-          finalGroundingMetadata = { ...(candidate.groundingMetadata as Record<string, unknown>) };
-        }
+          if (typeof candidate.finishMessage === 'string' && candidate.finishMessage.length > 0) {
+            finalFinishMessage = candidate.finishMessage;
+          }
 
-        const anyCandidate = candidate as any;
-        const urlMetadata = anyCandidate.urlContextMetadata || anyCandidate.url_context_metadata;
-        if (urlMetadata) {
-          finalUrlContextMetadata = urlMetadata;
-        }
+          if (Array.isArray(candidate.safetyRatings)) {
+            finalCandidateSafetyRatings = [...candidate.safetyRatings];
+          }
 
-        const toolCalls = anyCandidate.toolCalls as any[] | undefined;
-        if (toolCalls) {
-          for (const toolCall of toolCalls) {
-            if (toolCall.functionCall?.args?.urlContextMetadata) {
-              if (!finalGroundingMetadata) {
-                finalGroundingMetadata = {};
+          if (candidate.groundingMetadata) {
+            finalGroundingMetadata = { ...(candidate.groundingMetadata as Record<string, unknown>) };
+          }
+
+          const anyCandidate = candidate as any;
+          const urlMetadata = anyCandidate.urlContextMetadata || anyCandidate.url_context_metadata;
+          if (urlMetadata) {
+            finalUrlContextMetadata = urlMetadata;
+          }
+
+          const toolCalls = anyCandidate.toolCalls as any[] | undefined;
+          if (toolCalls) {
+            for (const toolCall of toolCalls) {
+              if (toolCall.functionCall?.args?.urlContextMetadata) {
+                if (!finalGroundingMetadata) {
+                  finalGroundingMetadata = {};
+                }
+                pushUniqueCitations(
+                  finalGroundingMetadata,
+                  toolCall.functionCall.args.urlContextMetadata.citations
+                );
               }
-              pushUniqueCitations(
-                finalGroundingMetadata,
-                toolCall.functionCall.args.urlContextMetadata.citations
-              );
-            }
 
-            if (toolCall.functionCall) {
-              latestToolCallFunction = toolCall.functionCall;
-              const anyToolCall = toolCall as any;
-              latestToolCallSignature =
-                anyToolCall.thoughtSignature ||
-                anyToolCall.thought_signature ||
-                anyToolCall.functionCall?.thoughtSignature ||
-                anyToolCall.functionCall?.thought_signature;
+              if (toolCall.functionCall) {
+                latestToolCallFunction = toolCall.functionCall;
+                const anyToolCall = toolCall as any;
+                latestToolCallSignature =
+                  anyToolCall.thoughtSignature ||
+                  anyToolCall.thought_signature ||
+                  anyToolCall.functionCall?.thoughtSignature ||
+                  anyToolCall.functionCall?.thought_signature;
+              }
             }
           }
-        }
 
-        const candidateParts = candidate.content?.parts;
-        if (!candidateParts?.length) {
-          continue;
-        }
-        hadCandidateParts = true;
-
-        for (const part of candidateParts) {
-          const anyPart = part as any;
-          const partSignature = anyPart.thoughtSignature || anyPart.thought_signature;
-          if (partSignature) {
-            latestThoughtSignatureFromParts = partSignature;
-          }
-
-          if (anyPart.functionCall) {
-            detectedFunctionCallPart = normalizeThoughtSignaturePart(part);
+          const candidateParts = candidate.content?.parts;
+          if (!candidateParts?.length) {
             continue;
           }
+          hadCandidateParts = true;
 
-          if (anyPart.thought) {
-            hadThoughtChunk = true;
-            writeSseEvent(response, 'thought', { chunk: part.text || '' });
-            continue;
+          for (const part of candidateParts) {
+            const anyPart = part as any;
+            const partSignature = anyPart.thoughtSignature || anyPart.thought_signature;
+            if (partSignature) {
+              latestThoughtSignatureFromParts = partSignature;
+            }
+
+            if (anyPart.functionCall) {
+              detectedFunctionCallPart = normalizeThoughtSignaturePart(part);
+              continue;
+            }
+
+            if (anyPart.thought) {
+              hadThoughtChunk = true;
+              writeSseEvent(response, 'thought', { chunk: part.text || '' });
+              continue;
+            }
+
+            writeSseEvent(response, 'part', { part });
           }
-
-          writeSseEvent(response, 'part', { part });
         }
+      } finally {
+        await closeMcpTools().catch(() => undefined);
       }
 
       if (!detectedFunctionCallPart && latestToolCallFunction) {
@@ -511,6 +727,16 @@ export const handleChatStreamRoute = async (
       }
 
       if (!abortController.signal.aborted) {
+        const webGroundingEvidence = collectWebGroundingEvidence({
+          groundingMetadata: finalGroundingMetadata,
+          urlContextMetadata: finalUrlContextMetadata,
+        });
+        const webGroundingDiagnostics = buildWebGroundingDiagnostics({
+          required: webGroundingRequirement.required,
+          policy: webGroundingRequirement.policy,
+          evidence: webGroundingEvidence,
+        });
+
         writeSseEvent(response, 'complete', {
           usageMetadata: finalUsageMetadata,
           groundingMetadata: finalGroundingMetadata,
@@ -526,6 +752,8 @@ export const handleChatStreamRoute = async (
             hadCandidate,
             hadCandidateParts,
             hadThoughtChunk,
+            mcp: mcpDiagnostics,
+            webGrounding: webGroundingDiagnostics,
           },
         });
       }

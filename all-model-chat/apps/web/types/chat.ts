@@ -4,6 +4,7 @@ import { ChatSettings, MediaResolution } from './settings';
 import { ThemeColors } from './theme';
 import { AppSettings, ModelOption } from './settings';
 import { translations } from '../utils/appUtils';
+import type { ChatStreamCompleteDiagnostics, ChatToolMode, McpServerStatus } from '@all-model-chat/shared-api';
 
 export interface VideoMetadata {
   startOffset?: string;
@@ -122,6 +123,7 @@ export interface ChatMessage {
   audioAutoplay?: boolean; // Controls whether the audioSrc should play automatically on render
   groundingMetadata?: any;
   urlContextMetadata?: any;
+  webGrounding?: ChatStreamCompleteDiagnostics['webGrounding'];
   suggestions?: string[];
   isGeneratingSuggestions?: boolean;
   stoppedByUser?: boolean;
@@ -229,6 +231,15 @@ export interface ChatInputToolbarProps {
 export interface ChatInputActionsProps {
   onAttachmentAction: (action: any) => void;
   disabled: boolean;
+  toolMode?: ChatToolMode;
+  onSelectToolMode?: (mode: ChatToolMode) => void;
+  enabledMcpServerIds?: string[];
+  onToggleMcpServer?: (serverId: string) => void;
+  mcpSelectionLocked?: boolean;
+  mcpServers?: McpServerStatus[];
+  isMcpEnabled?: boolean;
+  isMcpStatusLoading?: boolean;
+  mcpStatusError?: string | null;
   isGoogleSearchEnabled: boolean;
   onToggleGoogleSearch: () => void;
   isCodeExecutionEnabled: boolean;
@@ -293,6 +304,15 @@ export interface ChatInputProps {
   setAspectRatio?: (ratio: string) => void;
   imageSize?: string;
   setImageSize?: (size: string) => void;
+  toolMode?: ChatToolMode;
+  onSelectToolMode?: (mode: ChatToolMode) => void;
+  enabledMcpServerIds?: string[];
+  onToggleMcpServer?: (serverId: string) => void;
+  mcpSelectionLocked?: boolean;
+  mcpServers?: McpServerStatus[];
+  isMcpEnabled?: boolean;
+  isMcpStatusLoading?: boolean;
+  mcpStatusError?: string | null;
   isGoogleSearchEnabled: boolean;
   onToggleGoogleSearch: () => void;
   isCodeExecutionEnabled: boolean;
