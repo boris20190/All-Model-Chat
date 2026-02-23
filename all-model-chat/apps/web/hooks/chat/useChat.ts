@@ -14,6 +14,7 @@ import { useChatState } from './useChatState';
 import { useChatActions } from './useChatActions';
 import { useChatEffects } from './useChatEffects';
 import { useBackgroundKeepAlive } from '../core/useBackgroundKeepAlive';
+import { useMcpServers } from '../mcp/useMcpServers';
 
 export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch<React.SetStateAction<AppSettings>>, language: 'en' | 'zh') => {
 
@@ -47,6 +48,7 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
 
     // Optimize background performance when loading
     useBackgroundKeepAlive(isLoading);
+    const mcpState = useMcpServers();
 
     const sessionKeyMapRef = useRef<Map<string, string>>(new Map());
 
@@ -142,7 +144,8 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         handleStopGenerating: messageHandler.handleStopGenerating,
         startNewChat,
         handleTogglePinSession: historyHandler.handleTogglePinSession,
-        userScrolledUp
+        userScrolledUp,
+        mcpServerStatuses: mcpState.servers,
     });
 
     useChatEffects({
@@ -256,11 +259,21 @@ export const useChat = (appSettings: AppSettings, setAppSettings: React.Dispatch
         toggleCodeExecution: chatActions.toggleCodeExecution,
         toggleUrlContext: chatActions.toggleUrlContext,
         toggleDeepSearch: chatActions.toggleDeepSearch,
+        selectToolMode: chatActions.selectToolMode,
+        toggleMcpServer: chatActions.toggleMcpServer,
         handleTogglePinCurrentSession: chatActions.handleTogglePinCurrentSession,
         handleUpdateMessageContent: chatActions.handleUpdateMessageContent,
         handleUpdateMessageFile: chatActions.handleUpdateMessageFile,
         handleAddUserMessage: chatActions.handleAddUserMessage,
         handleLiveTranscript: chatActions.handleLiveTranscript,
+
+        // MCP status
+        isMcpEnabled: mcpState.isEnabled,
+        mcpServers: mcpState.servers,
+        mcpWarnings: mcpState.warnings,
+        isMcpLoading: mcpState.isLoading,
+        mcpError: mcpState.error,
+        refreshMcpServers: mcpState.refresh,
 
         // Agentic folder access
         projectContext,

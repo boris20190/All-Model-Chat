@@ -20,6 +20,15 @@ export interface ExtendedChatInputActionsProps extends ChatInputActionsProps {
 export const ChatInputActions: React.FC<ExtendedChatInputActionsProps> = ({
   onAttachmentAction,
   disabled,
+  toolMode,
+  onSelectToolMode,
+  enabledMcpServerIds,
+  onToggleMcpServer,
+  mcpSelectionLocked,
+  mcpServers,
+  isMcpEnabled,
+  isMcpStatusLoading,
+  mcpStatusError,
   isGoogleSearchEnabled,
   onToggleGoogleSearch,
   isCodeExecutionEnabled,
@@ -70,6 +79,15 @@ export const ChatInputActions: React.FC<ExtendedChatInputActionsProps> = ({
             )}
 
             <ToolsMenu
+                toolMode={toolMode}
+                onSelectToolMode={onSelectToolMode}
+                enabledMcpServerIds={enabledMcpServerIds}
+                onToggleMcpServer={onToggleMcpServer}
+                mcpSelectionLocked={mcpSelectionLocked}
+                mcpServers={mcpServers}
+                isMcpEnabled={isMcpEnabled}
+                isMcpStatusLoading={isMcpStatusLoading}
+                mcpStatusError={mcpStatusError}
                 isGoogleSearchEnabled={isGoogleSearchEnabled}
                 onToggleGoogleSearch={onToggleGoogleSearch}
                 isCodeExecutionEnabled={isCodeExecutionEnabled}

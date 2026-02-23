@@ -2,6 +2,7 @@
 import { GeminiService, ModelOption } from '../types';
 import { Part, UsageMetadata, File as GeminiFile, ChatHistoryItem } from "@google/genai";
 import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
+import type { ChatRequestToolConfig } from '../types/api';
 import { uploadFileApi, getFileMetadataApi } from './api/fileApi';
 import { generateImagesApi, editImageApi, generateSpeechApi, transcribeAudioApi, translateTextApi, generateTitleApi, generateSuggestionsApi, countTokensApi } from './api/generationApi';
 import { sendStatelessMessageStreamApi, sendStatelessMessageNonStreamApi } from './api/chatApi';
@@ -76,10 +77,11 @@ class GeminiServiceImpl implements GeminiService {
             functionCallPart?: Part,
             diagnostics?: ChatStreamCompleteDiagnostics
         ) => void,
-        role: 'user' | 'model' = 'user'
+        role: 'user' | 'model' = 'user',
+        toolConfig?: ChatRequestToolConfig
     ): Promise<void> {
         return sendStatelessMessageStreamApi(
-            apiKey, modelId, history, parts, config, abortSignal, onPart, onThoughtChunk, onError, onComplete, role
+            apiKey, modelId, history, parts, config, abortSignal, onPart, onThoughtChunk, onError, onComplete, role, toolConfig
         );
     }
 
@@ -98,10 +100,11 @@ class GeminiServiceImpl implements GeminiService {
             groundingMetadata?: any,
             urlContextMetadata?: any,
             diagnostics?: ChatStreamCompleteDiagnostics
-        ) => void
+        ) => void,
+        toolConfig?: ChatRequestToolConfig
     ): Promise<void> {
         return sendStatelessMessageNonStreamApi(
-            apiKey, modelId, history, parts, config, abortSignal, onError, onComplete
+            apiKey, modelId, history, parts, config, abortSignal, onError, onComplete, toolConfig
         );
     }
 }

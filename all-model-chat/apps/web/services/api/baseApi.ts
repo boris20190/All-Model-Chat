@@ -4,12 +4,14 @@ import { logService } from "../logService";
 import { dbService } from '../../utils/db';
 import { DEEP_SEARCH_SYSTEM_PROMPT } from "../../constants/promptConstants";
 import { SafetySetting, MediaResolution } from "../../types/settings";
+import type { ChatToolMode } from '@all-model-chat/shared-api';
 import {
     isGemini3Model,
     normalizeModelIdForComparison,
     normalizeThinkingLevelForModel,
     sanitizeApiKey
 } from "../../utils/appUtils";
+import { resolveToolMode } from '../../utils/toolMode.js';
 
 
 const POLLING_INTERVAL_MS = 2000; // 2 seconds
@@ -95,7 +97,19 @@ export const buildGenerationConfig = (
     mediaResolution?: MediaResolution,
     /** ASCII tree of project files for agentic folder access */
     projectContextTree?: string,
+    toolMode?: ChatToolMode,
+    enabledMcpServerIds?: string[],
 ): any => {
+    const normalizedToolMode = resolveToolMode({
+        toolMode,
+        enabledMcpServerIds,
+        isGoogleSearchEnabled,
+        isCodeExecutionEnabled,
+        isUrlContextEnabled,
+        isDeepSearchEnabled,
+    });
+    const hasSelectedMcpServers = Array.isArray(enabledMcpServerIds) && enabledMcpServerIds.length > 0;
+
     if (modelId === 'gemini-2.5-flash-image-preview' || modelId === 'gemini-2.5-flash-image') {
         const imageConfig: any = {};
         if (aspectRatio && aspectRatio !== 'Auto') imageConfig.aspectRatio = aspectRatio;
@@ -124,7 +138,9 @@ export const buildGenerationConfig = (
 
         // Add tools if enabled
         const tools = [];
-        if (isGoogleSearchEnabled || isDeepSearchEnabled) tools.push({ googleSearch: {} });
+        if (normalizedToolMode === 'builtin' && (isGoogleSearchEnabled || isDeepSearchEnabled)) {
+            tools.push({ googleSearch: {} });
+        }
         if (tools.length > 0) config.tools = tools;
 
         if (systemInstruction) config.systemInstruction = systemInstruction;
@@ -204,19 +220,23 @@ export const buildGenerationConfig = (
     }
 
     const tools = [];
-    // Deep Search requires Google Search tool
-    if (isGoogleSearchEnabled || isDeepSearchEnabled) {
-        tools.push({ googleSearch: {} });
-    }
-    if (isCodeExecutionEnabled) {
-        tools.push({ codeExecution: {} });
-    }
-    if (isUrlContextEnabled) {
-        tools.push({ urlContext: {} });
+    if (normalizedToolMode === 'builtin') {
+        // Deep Search requires Google Search tool
+        if (isGoogleSearchEnabled || isDeepSearchEnabled) {
+            tools.push({ googleSearch: {} });
+        }
+        if (isCodeExecutionEnabled) {
+            tools.push({ codeExecution: {} });
+        }
+        if (isUrlContextEnabled) {
+            tools.push({ urlContext: {} });
+        }
     }
 
-    // Agentic folder access: add read_file function declaration
-    if (projectContextTree) {
+    // Agentic folder access: add read_file function declaration in custom mode only.
+    // When MCP servers are selected we skip read_file because CallableTools and
+    // basic FunctionDeclarations cannot be mixed in automatic tool-calling mode.
+    if (normalizedToolMode === 'custom' && projectContextTree && !hasSelectedMcpServers) {
         tools.push({
             functionDeclarations: [{
                 name: "read_file",

@@ -77,6 +77,9 @@ export const DEFAULT_CHAT_SETTINGS = {
   hideThinkingInContext: false,
   safetySettings: DEFAULT_SAFETY_SETTINGS,
   mediaResolution: DEFAULT_MEDIA_RESOLUTION,
+  toolMode: 'none' as const,
+  enabledMcpServerIds: [] as string[],
+  mcpSelectionLocked: false,
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {

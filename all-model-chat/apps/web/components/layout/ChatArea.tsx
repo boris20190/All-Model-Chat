@@ -31,6 +31,8 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
     selectedFiles, setSelectedFiles, onSendMessage, isEditing, editMode, editingMessageId, setEditingMessageId, onStopGenerating,
     onCancelEdit, onProcessFiles, onProjectContextCreated, onAddFileById, onCancelUpload, onTranscribeAudio,
     isProcessingFile, fileError, isImageEditModel, aspectRatio, setAspectRatio, imageSize, setImageSize,
+    toolMode, onSelectToolMode, enabledMcpServerIds, onToggleMcpServer, mcpSelectionLocked, mcpServers,
+    isMcpEnabled, isMcpStatusLoading, mcpStatusError,
     isGoogleSearchEnabled, onToggleGoogleSearch, isCodeExecutionEnabled, onToggleCodeExecution,
     isUrlContextEnabled, onToggleUrlContext, isDeepSearchEnabled, onToggleDeepSearch,
     onClearChat, onOpenSettings, onToggleCanvasPrompt,
@@ -158,6 +160,15 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
             setAspectRatio={setAspectRatio}
             imageSize={imageSize}
             setImageSize={setImageSize}
+            toolMode={toolMode}
+            onSelectToolMode={onSelectToolMode}
+            enabledMcpServerIds={enabledMcpServerIds}
+            onToggleMcpServer={onToggleMcpServer}
+            mcpSelectionLocked={mcpSelectionLocked}
+            mcpServers={mcpServers}
+            isMcpEnabled={isMcpEnabled}
+            isMcpStatusLoading={isMcpStatusLoading}
+            mcpStatusError={mcpStatusError}
             t={t}
             isGoogleSearchEnabled={isGoogleSearchEnabled}
             onToggleGoogleSearch={onToggleGoogleSearch}

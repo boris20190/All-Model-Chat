@@ -4,6 +4,7 @@
 import { ChatSettings, ChatMessage, UploadedFile, AppSettings, ModelOption, SideViewContent, VideoMetadata, InputCommand, ProjectContext } from '../../../types';
 import { translations } from '../../../utils/appUtils';
 import { MediaResolution } from '../../../types/settings';
+import type { ChatToolMode, McpServerStatus } from '@all-model-chat/shared-api';
 
 export interface ChatAreaProps {
   activeSessionId: string | null;
@@ -101,6 +102,15 @@ export interface ChatAreaProps {
   setAspectRatio?: (ratio: string) => void;
   imageSize?: string;
   setImageSize?: (size: string) => void;
+  toolMode?: ChatToolMode;
+  onSelectToolMode?: (mode: ChatToolMode) => void;
+  enabledMcpServerIds?: string[];
+  onToggleMcpServer?: (serverId: string) => void;
+  mcpSelectionLocked?: boolean;
+  mcpServers?: McpServerStatus[];
+  isMcpEnabled?: boolean;
+  isMcpStatusLoading?: boolean;
+  mcpStatusError?: string | null;
   isGoogleSearchEnabled: boolean;
   onToggleGoogleSearch: () => void;
   isCodeExecutionEnabled: boolean;

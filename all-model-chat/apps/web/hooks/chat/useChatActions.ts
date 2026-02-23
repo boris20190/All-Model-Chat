@@ -5,6 +5,7 @@ import { useModelSelection } from './actions/useModelSelection';
 import { useChatSessionActions } from './actions/useChatSessionActions';
 import { useMessageUpdates } from './actions/useMessageUpdates';
 import { useAudioActions } from './actions/useAudioActions';
+import type { McpServerStatus } from '@all-model-chat/shared-api';
 
 interface UseChatActionsProps {
     appSettings: AppSettings;
@@ -26,6 +27,7 @@ interface UseChatActionsProps {
     startNewChat: () => void;
     handleTogglePinSession: (sessionId: string) => void;
     userScrolledUp: React.MutableRefObject<boolean>;
+    mcpServerStatuses: McpServerStatus[];
 }
 
 export const useChatActions = ({
@@ -44,6 +46,7 @@ export const useChatActions = ({
     startNewChat,
     handleTogglePinSession,
     userScrolledUp,
+    mcpServerStatuses,
 }: UseChatActionsProps) => {
 
     const { handleSelectModelInHeader } = useModelSelection({
@@ -62,6 +65,8 @@ export const useChatActions = ({
     const {
         handleClearCurrentChat,
         handleTogglePinCurrentSession,
+        selectToolMode,
+        toggleMcpServer,
         toggleGoogleSearch,
         toggleCodeExecution,
         toggleUrlContext,
@@ -74,7 +79,8 @@ export const useChatActions = ({
         setSelectedFiles,
         handleStopGenerating,
         startNewChat,
-        handleTogglePinSession
+        handleTogglePinSession,
+        mcpServerStatuses,
     });
 
     const {
@@ -103,6 +109,8 @@ export const useChatActions = ({
         handleSelectModelInHeader,
         handleClearCurrentChat,
         handleTranscribeAudio,
+        selectToolMode,
+        toggleMcpServer,
         toggleGoogleSearch,
         toggleCodeExecution,
         toggleUrlContext,
