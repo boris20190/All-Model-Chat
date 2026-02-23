@@ -8,6 +8,8 @@ export interface BffConfig {
   providerUseVertexAi: boolean;
   providerBaseUrl?: string;
   providerApiVersion?: string;
+  mcpEnabled: boolean;
+  mcpConfigPath?: string;
 }
 
 const parsePort = (rawPort: string | undefined, fallback: number): number => {
@@ -77,5 +79,7 @@ export const loadBffConfig = (): BffConfig => {
     providerUseVertexAi: parseBoolean(process.env.BFF_PROVIDER_VERTEXAI, false, 'BFF_PROVIDER_VERTEXAI'),
     providerBaseUrl: parseOptionalString(process.env.BFF_PROVIDER_BASE_URL),
     providerApiVersion: parseOptionalString(process.env.BFF_PROVIDER_API_VERSION),
+    mcpEnabled: parseBoolean(process.env.BFF_MCP_ENABLED, false, 'BFF_MCP_ENABLED'),
+    mcpConfigPath: parseOptionalString(process.env.BFF_MCP_CONFIG_PATH),
   };
 };

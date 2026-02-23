@@ -7,6 +7,7 @@ import { handleChatStreamRoute } from './routes/chatStream.js';
 import { handleFilesRoute } from './routes/files.js';
 import { handleGenerationRoute } from './routes/generation.js';
 import { handleModelsRoute } from './routes/models.js';
+import { handleMcpServersRoute } from './routes/mcp.js';
 
 const config = loadBffConfig();
 const keyPool = new ProviderKeyPool(config.providerApiKeys, {
@@ -49,12 +50,30 @@ const server = createServer((request, response) => {
       return;
     }
 
-    handleChatStreamRoute(request, response, geminiProviderClient).catch((error) => {
+    handleChatStreamRoute(request, response, geminiProviderClient, config).catch((error) => {
       if (response.writableEnded) {
         return;
       }
 
       const message = error instanceof Error ? error.message : 'Unexpected stream proxy failure.';
+      response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(
+        JSON.stringify({
+          error: {
+            code: 'internal_error',
+            message,
+            status: 500,
+          },
+        })
+      );
+    });
+    return;
+  }
+
+  if (path === '/api/mcp/servers') {
+    handleMcpServersRoute(request, response, config).catch((error) => {
+      if (response.writableEnded) return;
+      const message = error instanceof Error ? error.message : 'Unexpected MCP route failure.';
       response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
       response.end(
         JSON.stringify({
@@ -134,5 +153,10 @@ server.listen(config.port, config.host, () => {
     `[BFF] Provider mode: ${config.providerUseVertexAi ? 'vertexai' : 'gemini-api'} (baseUrl=${
       config.providerBaseUrl || 'default'
     }, apiVersion=${config.providerApiVersion || 'default'})`
+  );
+  console.log(
+    `[BFF] MCP integration: ${config.mcpEnabled ? 'enabled' : 'disabled'} (configPath=${
+      config.mcpConfigPath || '~/apps/all-model-chat-runtime/mcp.servers.json'
+    })`
   );
 });
