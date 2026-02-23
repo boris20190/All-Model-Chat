@@ -7,6 +7,7 @@ import { MediaResolution } from '../../../types/settings';
 import { ToggleItem } from '../../shared/ToggleItem';
 import { Select } from '../../shared/Select';
 import { Wand2 } from 'lucide-react';
+import { McpServerAvailabilityPanel } from './McpServerAvailabilityPanel';
 
 interface ChatBehaviorSectionProps {
   modelId: string;
@@ -115,6 +116,8 @@ export const ChatBehaviorSection: React.FC<ChatBehaviorSectionProps> = (props) =
                 t={t}
             />
         </div>
+
+        <McpServerAvailabilityPanel t={t} />
     </div>
   );
 };
