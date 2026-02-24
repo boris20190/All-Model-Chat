@@ -21,63 +21,6 @@ export const getFavicon = (url: string, title?: string) => {
     }
 };
 
-export const insertCitations = (text: string, metadata: any): string => {
-    if (!metadata || !metadata.groundingSupports) {
-        return text;
-    }
-
-    // IMPORTANT: Do NOT sanitize text here. 
-    // The indices in metadata.groundingSupports are byte offsets based on the RAW text returned by the API.
-    const rawText = text;
-
-    // Combine grounding chunks and citations into a single, indexed array
-    const sources = [
-        ...(metadata.groundingChunks?.map((c: any) => c.web) || []),
-        ...(metadata.citations || []),
-    ].filter(Boolean);
-
-    if (sources.length === 0) return rawText;
-
-    const encodedText = new TextEncoder().encode(rawText);
-    const toCharIndex = (byteIndex: number) => {
-        // Decode bytes up to byteIndex to find the corresponding character index in JS string
-        return new TextDecoder().decode(encodedText.slice(0, byteIndex)).length;
-    };
-
-    const sortedSupports = [...metadata.groundingSupports].sort(
-        (a: any, b: any) => (b.segment?.endIndex || 0) - (a.segment?.endIndex || 0)
-    );
-
-    let contentWithCitations = rawText;
-    for (const support of sortedSupports) {
-        const byteEndIndex = support.segment?.endIndex;
-        if (typeof byteEndIndex !== 'number') continue;
-
-        const charEndIndex = toCharIndex(byteEndIndex);
-        const chunkIndices = support.groundingChunkIndices || [];
-
-        const citationLinksHtml = chunkIndices
-            .map((chunkIndex: number) => {
-                if (chunkIndex >= sources.length) return '';
-                const source = sources[chunkIndex];
-                if (!source || !source.uri) return '';
-
-                const titleAttr = `Source: ${source.title || source.uri}`.replace(/"/g, '&quot;');
-                // Direct brackets in text for consistent coloring
-                return `<a href="${source.uri}" target="_blank" rel="noopener noreferrer" class="citation-ref" title="${titleAttr}">[${chunkIndex + 1}]</a>`;
-            })
-            .join('');
-
-        if (citationLinksHtml) {
-            contentWithCitations =
-                contentWithCitations.slice(0, charEndIndex) +
-                citationLinksHtml +
-                contentWithCitations.slice(charEndIndex);
-        }
-    }
-    return contentWithCitations;
-};
-
 export const extractSources = (metadata: any) => {
     if (!metadata) return [];
 

@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { UploadedFile, SideViewContent } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { translations } from '../../utils/appUtils';
-import { insertCitations, extractSources } from './grounded-response/utils';
+import { extractSources } from './grounded-response/utils';
 import { SearchQueries } from './grounded-response/SearchQueries';
 import { ContextUrls } from './grounded-response/ContextUrls';
 import { SearchSources } from './grounded-response/SearchSources';
@@ -21,6 +21,7 @@ interface GroundedResponseProps {
   t: (key: keyof typeof translations) => string;
   themeId: string;
   onOpenSidePanel: (content: SideViewContent) => void;
+  messageId?: string;
 }
 
 export const GroundedResponse: React.FC<GroundedResponseProps> = ({ 
@@ -35,12 +36,14 @@ export const GroundedResponse: React.FC<GroundedResponseProps> = ({
     isGraphvizRenderingEnabled, 
     t, 
     themeId, 
-    onOpenSidePanel 
+    onOpenSidePanel,
+    messageId,
 }) => {
-  
-  const content = useMemo(() => insertCitations(text, metadata), [text, metadata]);
   const sources = useMemo(() => extractSources(metadata), [metadata]);
-  const searchQueries = useMemo(() => metadata?.webSearchQueries || [], [metadata]);
+  const searchQueries = useMemo(
+    () => metadata?.webSearchQueries || metadata?.web_search_queries || [],
+    [metadata]
+  );
 
   return (
     <div className="space-y-4">
@@ -50,7 +53,7 @@ export const GroundedResponse: React.FC<GroundedResponseProps> = ({
       {/* Main Content */}
       <div className="markdown-body">
         <MarkdownRenderer
-          content={content}
+          content={text}
           isLoading={isLoading}
           onImageClick={onImageClick}
           onOpenHtmlPreview={onOpenHtmlPreview}
@@ -61,6 +64,11 @@ export const GroundedResponse: React.FC<GroundedResponseProps> = ({
           t={t}
           themeId={themeId}
           onOpenSidePanel={onOpenSidePanel}
+          groundingMetadata={metadata}
+          groundingDiagnostics={{
+            messageId,
+            isFinalChunk: !isLoading,
+          }}
         />
       </div>
       

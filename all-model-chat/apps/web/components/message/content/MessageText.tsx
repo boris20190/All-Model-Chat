@@ -105,6 +105,7 @@ export const MessageText: React.FC<MessageTextProps> = ({
                 t={t} 
                 themeId={themeId} 
                 onOpenSidePanel={onOpenSidePanel}
+                messageId={message.id}
               />
             ) : effectiveContent ? (
                 <div className={`markdown-body ${isLoading ? 'is-loading' : ''}`} style={{ fontSize: `${baseFontSize}px` }}> 

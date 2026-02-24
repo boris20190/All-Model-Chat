@@ -7,10 +7,12 @@ import { GraphvizBlock } from './blocks/GraphvizBlock';
 import { TableBlock } from './blocks/TableBlock';
 import { ToolResultBlock } from './blocks/ToolResultBlock';
 import { UploadedFile, SideViewContent } from '../../types';
-import { translations } from '../../utils/appUtils';
+import { logService, translations } from '../../utils/appUtils';
 import { extractTextFromNode } from '../../utils/uiUtils';
 import { getRehypePlugins, remarkPlugins } from '../../utils/markdownConfig';
 import { InlineCode } from './code-block/InlineCode';
+import { remarkGroundingCitations } from '../../utils/remarkGroundingCitations';
+import { reportGroundingCitationDiagnostics } from '../../utils/groundingCitationLogging';
 
 interface MarkdownRendererProps {
   content: string;
@@ -25,6 +27,11 @@ interface MarkdownRendererProps {
   themeId: string;
   onOpenSidePanel: (content: SideViewContent) => void;
   hideThinkingInContext?: boolean;
+  groundingMetadata?: any;
+  groundingDiagnostics?: {
+    messageId?: string;
+    isFinalChunk?: boolean;
+  };
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
@@ -39,10 +46,44 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
   t,
   themeId,
   onOpenSidePanel,
-  hideThinkingInContext
+  hideThinkingInContext,
+  groundingMetadata,
+  groundingDiagnostics,
 }) => {
 
   const rehypePlugins = useMemo(() => getRehypePlugins(allowHtml), [allowHtml]);
+  const effectiveRemarkPlugins = useMemo(() => {
+    const basePlugins = [...remarkPlugins];
+
+    if (!groundingMetadata) {
+      return basePlugins;
+    }
+
+    basePlugins.push([
+      remarkGroundingCitations,
+      {
+        rawText: content,
+        groundingMetadata,
+        onDiagnostics: (diagnostics: any) => {
+          reportGroundingCitationDiagnostics(
+            {
+              ...diagnostics,
+              messageId: groundingDiagnostics?.messageId,
+              isFinalChunk: groundingDiagnostics?.isFinalChunk,
+            },
+            logService
+          );
+        },
+      },
+    ]);
+
+    return basePlugins;
+  }, [
+    content,
+    groundingMetadata,
+    groundingDiagnostics?.messageId,
+    groundingDiagnostics?.isFinalChunk,
+  ]);
 
   const components = useMemo(() => ({
     code: (props: any) => {
@@ -171,6 +212,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
         }
     }
 
+    // For grounded responses we keep raw content to preserve offset alignment
+    // between grounding metadata and markdown source positions.
+    if (groundingMetadata) {
+      return text;
+    }
+
     // 2. Split by code blocks to avoid replacing content inside them
     // Capture both complete code blocks AND unclosed code blocks at the end of the string
     // This ensures that streaming code isn't treated as normal text which would trigger LaTeX replacement
@@ -188,12 +235,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
       return processedPart;
     }).join('');
-  }, [content, hideThinkingInContext, isLoading]);
+  }, [content, hideThinkingInContext, isLoading, groundingMetadata]);
 
   return (
     <div className={isLoading ? 'is-loading' : ''}>
       <ReactMarkdown
-        remarkPlugins={remarkPlugins as any}
+        remarkPlugins={effectiveRemarkPlugins as any}
         rehypePlugins={rehypePlugins as any}
         components={components}
         // Explicitly allow all URLs (including data:) because we use rehype-sanitize to filter unsafe protocols.
