@@ -26,8 +26,6 @@ export interface ChatHistoryTurn {
   parts: Part[];
 }
 
-export type ChatToolMode = 'builtin' | 'custom' | 'none';
-
 export interface ChatStreamRequestPayload {
   model: string;
   history: ChatHistoryTurn[];
@@ -35,13 +33,8 @@ export interface ChatStreamRequestPayload {
   config?: unknown;
   role: ChatRole;
   apiKeyOverride?: string;
-  toolMode?: ChatToolMode;
   mcp?: {
     enabledServerIds?: string[];
-  };
-  webGrounding?: {
-    required?: boolean;
-    policy?: 'off' | 'warn';
   };
 }
 
@@ -88,23 +81,23 @@ export interface ChatStreamCompleteDiagnostics {
   mcp?: {
     requestedServerIds?: string[];
     attachedServerIds?: string[];
+    attachMeta?: Array<{
+      serverId: string;
+      transport: string;
+      protocolVersion?: string;
+      toolCount?: number;
+      latencyMs?: number;
+    }>;
     skipped?: Array<{
       id: string;
       reason: string;
+      code?: 'config_error' | 'connect_timeout' | 'initialize_failed' | 'list_tools_failed';
+    }>;
+    invokedTools?: Array<{
+      serverId: string;
+      toolName: string;
     }>;
     degraded?: boolean;
-  };
-  webGrounding?: {
-    required?: boolean;
-    policy?: 'off' | 'warn';
-    satisfied?: boolean;
-    reason?: 'not_required' | 'policy_off' | 'search_evidence_found' | 'search_evidence_missing';
-    evidence?: {
-      webSearchQueries?: number;
-      webGroundingChunks?: number;
-      citations?: number;
-      urlContextUrls?: number;
-    };
   };
 }
 
@@ -222,7 +215,13 @@ export interface FileDeleteResponse {
 export interface McpServerStatus {
   id: string;
   name: string;
+  transport?: McpTransport;
   available: boolean;
+  attachable?: boolean;
+  errorCode?: 'config_error' | 'connect_timeout' | 'initialize_failed' | 'list_tools_failed';
+  protocolVersion?: string;
+  toolCount?: number;
+  latencyMs?: number;
   lastCheckedAt?: string;
   statusMessage?: string;
 }
@@ -230,4 +229,55 @@ export interface McpServerStatus {
 export interface McpServersResponse {
   enabled: boolean;
   servers: McpServerStatus[];
+}
+
+export type McpTransport = 'stdio' | 'http' | 'sse';
+
+export interface McpConfigServer {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  enabled: boolean;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  sseFallback?: boolean;
+  connectTimeoutMs?: number;
+  timeoutMs?: number;
+}
+
+export interface McpConfigResponse {
+  enabled: boolean;
+  configPath: string;
+  servers: McpConfigServer[];
+  warnings?: string[];
+}
+
+export interface McpImportRequest {
+  payload: unknown;
+}
+
+export interface McpImportResponse extends McpConfigResponse {
+  summary: {
+    created: string[];
+    updated: string[];
+    skipped: Array<{
+      id: string;
+      reason: string;
+    }>;
+  };
+}
+
+export interface RuntimeDebugConfigResponse {
+  enabled: boolean;
+  logPath: string;
+  maxBytes: number;
+  maxFiles: number;
+}
+
+export interface RuntimeDebugConfigUpdateRequest {
+  enabled: boolean;
 }

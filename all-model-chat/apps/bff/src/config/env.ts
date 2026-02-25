@@ -10,6 +10,8 @@ export interface BffConfig {
   providerApiVersion?: string;
   mcpEnabled: boolean;
   mcpConfigPath?: string;
+  mcpRuntimeMode: 'legacy' | 'sdk';
+  mcpSdkModulePath?: string;
 }
 
 const parsePort = (rawPort: string | undefined, fallback: number): number => {
@@ -55,6 +57,15 @@ const parseOptionalString = (rawValue: string | undefined): string | undefined =
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+const parseMcpRuntimeMode = (rawValue: string | undefined): 'legacy' | 'sdk' => {
+  if (!rawValue) return 'sdk';
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'legacy' || normalized === 'sdk') {
+    return normalized;
+  }
+  throw new Error(`Invalid BFF_MCP_RUNTIME_MODE value: ${rawValue}`);
+};
+
 const parseProviderApiKeys = (rawList: string | undefined, rawSingle: string | undefined): string[] => {
   const merged = [rawList || '', rawSingle || ''].join('\n');
 
@@ -81,5 +92,7 @@ export const loadBffConfig = (): BffConfig => {
     providerApiVersion: parseOptionalString(process.env.BFF_PROVIDER_API_VERSION),
     mcpEnabled: parseBoolean(process.env.BFF_MCP_ENABLED, false, 'BFF_MCP_ENABLED'),
     mcpConfigPath: parseOptionalString(process.env.BFF_MCP_CONFIG_PATH),
+    mcpRuntimeMode: parseMcpRuntimeMode(process.env.BFF_MCP_RUNTIME_MODE),
+    mcpSdkModulePath: parseOptionalString(process.env.BFF_MCP_SDK_MODULE_PATH),
   };
 };

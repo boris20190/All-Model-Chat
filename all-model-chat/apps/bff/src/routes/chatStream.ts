@@ -1,18 +1,13 @@
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { GoogleGenAI, Part, UsageMetadata } from '@google/genai';
 import { GeminiProviderClient } from '../providers/geminiClient.js';
-import type { ChatHistoryTurn, ChatStreamRequestPayload, ChatToolMode } from '@all-model-chat/shared-api';
+import type { ChatHistoryTurn, ChatStreamRequestPayload } from '@all-model-chat/shared-api';
 import type { ChatRole } from '@all-model-chat/shared-types';
 import { mapProviderError, sanitizeApiKey } from './routeCommon.js';
 import { normalizeThinkingLevelForModel, type ThinkingLevel } from '../utils/thinking.js';
 import type { BffConfig } from '../config/env.js';
 import { loadMcpRuntimeConfig } from '../mcp/config.js';
 import { attachMcpCallableTools } from '../mcp/clientManager.js';
-import {
-  buildWebGroundingDiagnostics,
-  collectWebGroundingEvidence,
-  resolveWebGroundingRequirement,
-} from './webGrounding.js';
 
 interface ValidationErrorShape {
   code: string;
@@ -20,7 +15,13 @@ interface ValidationErrorShape {
   status: number;
 }
 
-const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+type RuntimeErrorReporter = (
+  source: string,
+  error: unknown,
+  context?: Record<string, unknown>
+) => Promise<void>;
+
+const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 const SSE_HEADERS = {
   'content-type': 'text/event-stream; charset=utf-8',
@@ -90,6 +91,20 @@ const readRequestBody = async (request: IncomingMessage): Promise<string> => {
     let body = '';
     let totalBytes = 0;
     let isCompleted = false;
+    const declaredLength = Number(request.headers['content-length']);
+
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+      isCompleted = true;
+      request.resume();
+      reject(
+        new ValidationError({
+          code: 'payload_too_large',
+          message: `Request body exceeds ${MAX_REQUEST_BYTES} bytes.`,
+          status: 413,
+        })
+      );
+      return;
+    }
 
     request.setEncoding('utf8');
 
@@ -99,6 +114,9 @@ const readRequestBody = async (request: IncomingMessage): Promise<string> => {
       totalBytes += Buffer.byteLength(chunk);
       if (totalBytes > MAX_REQUEST_BYTES) {
         isCompleted = true;
+        // Do not destroy socket here; otherwise reverse proxy reports 502 (connection reset by peer).
+        // Keep draining request body and return a proper 413 response.
+        request.resume();
         reject(
           new ValidationError({
             code: 'payload_too_large',
@@ -106,7 +124,6 @@ const readRequestBody = async (request: IncomingMessage): Promise<string> => {
             status: 413,
           })
         );
-        request.destroy();
         return;
       }
 
@@ -208,18 +225,6 @@ const normalizeHistory = (input: unknown): ChatHistoryTurn[] => {
   });
 };
 
-const parseToolMode = (value: unknown): ChatToolMode | undefined => {
-  if (value === undefined) return undefined;
-  if (value !== 'builtin' && value !== 'custom' && value !== 'none') {
-    throw new ValidationError({
-      code: 'invalid_request',
-      message: '`toolMode` must be one of "builtin", "custom", or "none".',
-      status: 400,
-    });
-  }
-  return value;
-};
-
 const parseEnabledServerIds = (value: unknown): string[] | undefined => {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) {
@@ -250,50 +255,6 @@ const parseEnabledServerIds = (value: unknown): string[] | undefined => {
   return [...deduped];
 };
 
-const parseWebGrounding = (value: unknown): ChatStreamRequestPayload['webGrounding'] | undefined => {
-  if (value === undefined) return undefined;
-  if (!isObject(value)) {
-    throw new ValidationError({
-      code: 'invalid_request',
-      message: '`webGrounding` must be an object.',
-      status: 400,
-    });
-  }
-
-  const requiredRaw = value.required;
-  const policyRaw = value.policy;
-
-  if (requiredRaw !== undefined && typeof requiredRaw !== 'boolean') {
-    throw new ValidationError({
-      code: 'invalid_request',
-      message: '`webGrounding.required` must be a boolean.',
-      status: 400,
-    });
-  }
-
-  if (policyRaw !== undefined && policyRaw !== 'off' && policyRaw !== 'warn') {
-    throw new ValidationError({
-      code: 'invalid_request',
-      message: '`webGrounding.policy` must be one of "off" or "warn".',
-      status: 400,
-    });
-  }
-
-  const parsed: NonNullable<ChatStreamRequestPayload['webGrounding']> = {};
-  if (typeof requiredRaw === 'boolean') {
-    parsed.required = requiredRaw;
-  }
-  if (policyRaw === 'off' || policyRaw === 'warn') {
-    parsed.policy = policyRaw;
-  }
-
-  if (parsed.required === undefined && parsed.policy === undefined) {
-    return undefined;
-  }
-
-  return parsed;
-};
-
 const isBuiltinToolEntry = (tool: unknown): boolean => {
   if (!isObject(tool)) return false;
   return 'googleSearch' in tool || 'codeExecution' in tool || 'urlContext' in tool;
@@ -302,17 +263,6 @@ const isBuiltinToolEntry = (tool: unknown): boolean => {
 const isFunctionDeclarationEntry = (tool: unknown): boolean => {
   if (!isObject(tool)) return false;
   return Array.isArray(tool.functionDeclarations);
-};
-
-const inferToolModeFromConfig = (rawConfig: unknown): ChatToolMode => {
-  if (!isObject(rawConfig) || !Array.isArray(rawConfig.tools)) {
-    return 'none';
-  }
-
-  const tools = rawConfig.tools;
-  if (tools.some((tool) => isBuiltinToolEntry(tool))) return 'builtin';
-  if (tools.some((tool) => isFunctionDeclarationEntry(tool))) return 'custom';
-  return 'none';
 };
 
 const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
@@ -365,10 +315,8 @@ const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
   }
   const history = normalizeHistory(parsed.history);
   const parts = normalizePartArray(parsed.parts, '`parts`', false);
-  const toolMode = parseToolMode(parsed.toolMode);
   const mcpPayload = isObject(parsed.mcp) ? parsed.mcp : undefined;
   const enabledServerIds = parseEnabledServerIds(mcpPayload?.enabledServerIds);
-  const webGrounding = parseWebGrounding(parsed.webGrounding);
 
   if (history.length === 0 && parts.length === 0) {
     throw new ValidationError({
@@ -385,9 +333,7 @@ const parseChatStreamPayload = (rawBody: string): ChatStreamRequestPayload => {
     config: parsed.config,
     role,
     apiKeyOverride,
-    toolMode,
     mcp: enabledServerIds ? { enabledServerIds } : undefined,
-    webGrounding,
   };
 };
 
@@ -408,7 +354,8 @@ export const handleChatStreamRoute = async (
   request: IncomingMessage,
   response: ServerResponse,
   geminiProviderClient: GeminiProviderClient,
-  bffConfig: BffConfig
+  bffConfig: BffConfig,
+  logRuntimeError?: RuntimeErrorReporter
 ): Promise<void> => {
   let payload: ChatStreamRequestPayload;
   try {
@@ -474,13 +421,20 @@ export const handleChatStreamRoute = async (
       const requestedMcpServerIds = payload.mcp?.enabledServerIds
         ? [...payload.mcp.enabledServerIds]
         : [];
-      const finalToolMode: ChatToolMode = payload.toolMode || inferToolModeFromConfig(payload.config);
       const mcpDiagnostics =
         requestedMcpServerIds.length > 0
           ? {
               requestedServerIds: [...requestedMcpServerIds],
               attachedServerIds: [] as string[],
-              skipped: [] as Array<{ id: string; reason: string }>,
+              attachMeta: [] as Array<{
+                serverId: string;
+                transport: string;
+                protocolVersion?: string;
+                toolCount?: number;
+                latencyMs?: number;
+              }>,
+              skipped: [] as Array<{ id: string; reason: string; code?: string }>,
+              invokedTools: [] as Array<{ serverId: string; toolName: string }>,
               degraded: false,
             }
           : undefined;
@@ -506,35 +460,31 @@ export const handleChatStreamRoute = async (
       }
 
       const rawTools = Array.isArray(configClone.tools) ? [...configClone.tools] : [];
-      let normalizedTools = rawTools;
+      let normalizedTools = rawTools.filter(
+        (tool) => !isBuiltinToolEntry(tool) && !isFunctionDeclarationEntry(tool)
+      );
+      const removedBuiltinCount = rawTools.filter((tool) => isBuiltinToolEntry(tool)).length;
+      const removedFunctionDeclCount = rawTools.filter((tool) => isFunctionDeclarationEntry(tool)).length;
 
-      if (finalToolMode === 'builtin') {
-        normalizedTools = rawTools.filter((tool) => isBuiltinToolEntry(tool));
-      } else if (finalToolMode === 'custom') {
-        normalizedTools = rawTools.filter((tool) => isFunctionDeclarationEntry(tool));
-      } else if (finalToolMode === 'none') {
-        normalizedTools = [];
+      if (removedBuiltinCount > 0) {
+        mcpDiagnostics?.skipped.push({
+          id: 'removed-builtin-tools',
+          reason: `Removed ${String(
+            removedBuiltinCount
+          )} Gemini built-in tool entries. MCP-only mode is enforced.`,
+          code: 'config_error',
+        });
       }
-
-      if (requestedMcpServerIds.length > 0 && finalToolMode !== 'custom') {
-        requestedMcpServerIds.forEach((serverId) => {
-          mcpDiagnostics?.skipped.push({
-            id: serverId,
-            reason: `Ignored because toolMode=${finalToolMode}. MCP servers attach only in custom mode.`,
-          });
+      if (removedFunctionDeclCount > 0) {
+        mcpDiagnostics?.skipped.push({
+          id: 'removed-function-declarations',
+          reason:
+            'Removed local FunctionDeclarations because MCP callable tools cannot be mixed with them in automatic function-calling mode.',
+          code: 'config_error',
         });
       }
 
-      if (finalToolMode === 'custom' && requestedMcpServerIds.length > 0) {
-        if (normalizedTools.some((tool) => isFunctionDeclarationEntry(tool))) {
-          mcpDiagnostics?.skipped.push({
-            id: 'local-function-declarations',
-            reason:
-              'Basic FunctionDeclarations were removed because MCP callable tools cannot be mixed with them in automatic function-calling mode.',
-          });
-          normalizedTools = normalizedTools.filter((tool) => !isFunctionDeclarationEntry(tool));
-        }
-
+      if (requestedMcpServerIds.length > 0) {
         try {
           const runtime = await loadMcpRuntimeConfig(bffConfig);
           if (runtime.warnings.length > 0) {
@@ -542,6 +492,7 @@ export const handleChatStreamRoute = async (
               mcpDiagnostics?.skipped.push({
                 id: `config-warning-${index + 1}`,
                 reason: warning,
+                code: 'config_error',
               });
             });
           }
@@ -550,6 +501,7 @@ export const handleChatStreamRoute = async (
             runtime,
             requestedServerIds: requestedMcpServerIds,
             existingTools: normalizedTools,
+            runtimeMode: bffConfig.mcpRuntimeMode,
           });
 
           normalizedTools = [...normalizedTools, ...attachment.tools];
@@ -557,12 +509,21 @@ export const handleChatStreamRoute = async (
 
           if (mcpDiagnostics) {
             mcpDiagnostics.attachedServerIds = [...attachment.attachedServerIds];
+            mcpDiagnostics.attachMeta = [...attachment.attachMeta];
             mcpDiagnostics.skipped.push(...attachment.skipped);
+            mcpDiagnostics.invokedTools = attachment.invokedTools;
           }
         } catch (error) {
+          if (logRuntimeError) {
+            await logRuntimeError('chat_stream.mcp_attach', error, {
+              requestedServerIds: requestedMcpServerIds,
+              model: payload.model,
+            });
+          }
           mcpDiagnostics?.skipped.push({
             id: 'mcp-attach',
             reason: error instanceof Error ? error.message : String(error),
+            code: 'initialize_failed',
           });
         }
       }
@@ -578,12 +539,6 @@ export const handleChatStreamRoute = async (
           mcpDiagnostics.requestedServerIds.length > 0 &&
           mcpDiagnostics.attachedServerIds.length === 0;
       }
-
-      const webGroundingRequirement = resolveWebGroundingRequirement({
-        payload,
-        finalToolMode,
-        normalizedTools,
-      });
 
       const effectiveConfig: unknown = configClone;
 
@@ -702,7 +657,16 @@ export const handleChatStreamRoute = async (
           }
         }
       } finally {
-        await closeMcpTools().catch(() => undefined);
+        try {
+          await closeMcpTools();
+        } catch (error) {
+          if (logRuntimeError) {
+            await logRuntimeError('chat_stream.mcp_close', error, {
+              requestedServerIds: payload.mcp?.enabledServerIds || [],
+              model: payload.model,
+            });
+          }
+        }
       }
 
       if (!detectedFunctionCallPart && latestToolCallFunction) {
@@ -727,16 +691,6 @@ export const handleChatStreamRoute = async (
       }
 
       if (!abortController.signal.aborted) {
-        const webGroundingEvidence = collectWebGroundingEvidence({
-          groundingMetadata: finalGroundingMetadata,
-          urlContextMetadata: finalUrlContextMetadata,
-        });
-        const webGroundingDiagnostics = buildWebGroundingDiagnostics({
-          required: webGroundingRequirement.required,
-          policy: webGroundingRequirement.policy,
-          evidence: webGroundingEvidence,
-        });
-
         writeSseEvent(response, 'complete', {
           usageMetadata: finalUsageMetadata,
           groundingMetadata: finalGroundingMetadata,
@@ -753,7 +707,6 @@ export const handleChatStreamRoute = async (
             hadCandidateParts,
             hadThoughtChunk,
             mcp: mcpDiagnostics,
-            webGrounding: webGroundingDiagnostics,
           },
         });
       }
@@ -782,6 +735,12 @@ export const handleChatStreamRoute = async (
       });
     }
   } catch (error) {
+    if (logRuntimeError) {
+      await logRuntimeError('chat_stream.route', error, {
+        model: payload.model,
+        requestedServerIds: payload.mcp?.enabledServerIds || [],
+      });
+    }
     if (!abortController.signal.aborted) {
       writeSseEvent(response, 'error', { error: mapProviderError(error) });
     }
