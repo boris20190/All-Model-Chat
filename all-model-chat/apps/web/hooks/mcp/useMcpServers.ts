@@ -36,6 +36,16 @@ export const useMcpServers = () => {
         refresh();
     }, [refresh]);
 
+    useEffect(() => {
+        const handleConfigChanged = () => {
+            refresh();
+        };
+        window.addEventListener('mcp-config-updated', handleConfigChanged);
+        return () => {
+            window.removeEventListener('mcp-config-updated', handleConfigChanged);
+        };
+    }, [refresh]);
+
     return {
         isEnabled,
         servers,

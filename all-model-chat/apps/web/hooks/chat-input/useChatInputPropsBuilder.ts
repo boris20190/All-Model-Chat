@@ -74,23 +74,12 @@ export const useChatInputPropsBuilder = (
     const actionsProps: ChatInputActionsProps = {
         onAttachmentAction: modalsState.handleAttachmentAction,
         disabled: inputState.isAddingById || isAnyModalOpen || inputState.isWaitingForUpload || localFileState.isConverting,
-        toolMode: props.toolMode || 'none',
-        onSelectToolMode: props.onSelectToolMode,
         enabledMcpServerIds: props.enabledMcpServerIds || [],
         onToggleMcpServer: props.onToggleMcpServer,
-        mcpSelectionLocked: props.mcpSelectionLocked,
         mcpServers: props.mcpServers || [],
         isMcpEnabled: props.isMcpEnabled,
         isMcpStatusLoading: props.isMcpStatusLoading,
         mcpStatusError: props.mcpStatusError,
-        isGoogleSearchEnabled: props.isGoogleSearchEnabled,
-        onToggleGoogleSearch: () => handlers.handleToggleToolAndFocus(props.onToggleGoogleSearch),
-        isCodeExecutionEnabled: props.isCodeExecutionEnabled,
-        onToggleCodeExecution: () => handlers.handleToggleToolAndFocus(props.onToggleCodeExecution),
-        isUrlContextEnabled: props.isUrlContextEnabled,
-        onToggleUrlContext: () => handlers.handleToggleToolAndFocus(props.onToggleUrlContext),
-        isDeepSearchEnabled: props.isDeepSearchEnabled,
-        onToggleDeepSearch: () => handlers.handleToggleToolAndFocus(props.onToggleDeepSearch),
         onAddYouTubeVideo: () => { 
             modalsState.setShowAddByUrlInput(true); 
             inputState.textareaRef.current?.focus(); 

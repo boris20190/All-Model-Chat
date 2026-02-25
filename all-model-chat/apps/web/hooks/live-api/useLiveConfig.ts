@@ -15,13 +15,7 @@ export const useLiveConfig = ({ chatSettings, sessionHandle, clientFunctions }: 
     return useMemo(() => {
         // Construct Tools Configuration
         const tools: Tool[] = [];
-        
-        // Server-side tools
-        if (chatSettings.isGoogleSearchEnabled || chatSettings.isDeepSearchEnabled) {
-            tools.push({ googleSearch: {} });
-        }
-        
-        // Code execution is not supported by Native Audio models (Live API)
+        void clientFunctions;
         
         // Client-side tools handling (if specific definitions needed, add here)
         // Note: Function declarations for client tools would be added here if we were defining them schema-first.

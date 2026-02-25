@@ -127,10 +127,6 @@ export const usePreloadedScenarios = ({
             sessionSettings.modelId = activeChat.settings.modelId;
             sessionSettings.thinkingBudget = activeChat.settings.thinkingBudget;
             sessionSettings.thinkingLevel = activeChat.settings.thinkingLevel;
-            sessionSettings.isGoogleSearchEnabled = activeChat.settings.isGoogleSearchEnabled;
-            sessionSettings.isCodeExecutionEnabled = activeChat.settings.isCodeExecutionEnabled;
-            sessionSettings.isUrlContextEnabled = activeChat.settings.isUrlContextEnabled;
-            sessionSettings.isDeepSearchEnabled = activeChat.settings.isDeepSearchEnabled;
         }
 
         const title = scenarioToLoad.title || generateSessionTitle(messages) || 'New Chat';

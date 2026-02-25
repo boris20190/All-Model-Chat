@@ -69,17 +69,11 @@ export const DEFAULT_CHAT_SETTINGS = {
   thinkingBudget: DEFAULT_THINKING_BUDGET,
   thinkingLevel: DEFAULT_THINKING_LEVEL as 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH',
   lockedApiKey: null,
-  isGoogleSearchEnabled: false,
-  isCodeExecutionEnabled: false,
-  isUrlContextEnabled: false,
-  isDeepSearchEnabled: false,
   isRawModeEnabled: false,
   hideThinkingInContext: false,
   safetySettings: DEFAULT_SAFETY_SETTINGS,
   mediaResolution: DEFAULT_MEDIA_RESOLUTION,
-  toolMode: 'none' as const,
   enabledMcpServerIds: [] as string[],
-  mcpSelectionLocked: false,
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {

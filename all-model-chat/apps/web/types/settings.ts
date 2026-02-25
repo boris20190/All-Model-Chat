@@ -1,6 +1,4 @@
 
-import type { ChatToolMode } from '@all-model-chat/shared-api';
-
 export interface ModelOption {
   id: string;
   name: string;
@@ -54,17 +52,11 @@ export interface ChatSettings {
   thinkingBudget: number;
   thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
   lockedApiKey?: string | null;
-  isGoogleSearchEnabled?: boolean;
-  isCodeExecutionEnabled?: boolean;
-  isUrlContextEnabled?: boolean;
-  isDeepSearchEnabled?: boolean;
   isRawModeEnabled?: boolean;
   hideThinkingInContext?: boolean;
   safetySettings?: SafetySetting[];
   mediaResolution?: MediaResolution;
-  toolMode?: ChatToolMode;
   enabledMcpServerIds?: string[];
-  mcpSelectionLocked?: boolean;
 }
 
 export interface AppSettings extends ChatSettings {

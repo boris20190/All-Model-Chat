@@ -63,17 +63,16 @@ export const useAppHandlers = ({
   const handleToggleBBoxMode = useCallback(() => {
     const isCurrentlyBBox = currentChatSettings.systemInstruction === BBOX_SYSTEM_PROMPT;
     if (isCurrentlyBBox) {
-        setAppSettings(prev => ({...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION, isCodeExecutionEnabled: false}));
+        setAppSettings(prev => ({...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION}));
         if (activeSessionId && setCurrentChatSettings) {
-            setCurrentChatSettings(prev => ({ ...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION, isCodeExecutionEnabled: false }));
+            setCurrentChatSettings(prev => ({ ...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION }));
         }
     } else {
-        setAppSettings(prev => ({...prev, systemInstruction: BBOX_SYSTEM_PROMPT, isCodeExecutionEnabled: true}));
+        setAppSettings(prev => ({...prev, systemInstruction: BBOX_SYSTEM_PROMPT}));
         if (activeSessionId && setCurrentChatSettings) {
             setCurrentChatSettings(prev => ({
                 ...prev,
                 systemInstruction: BBOX_SYSTEM_PROMPT,
-                isCodeExecutionEnabled: true
             }));
         }
     }
@@ -82,17 +81,16 @@ export const useAppHandlers = ({
   const handleToggleGuideMode = useCallback(() => {
     const isCurrentlyGuide = currentChatSettings.systemInstruction === HD_GUIDE_SYSTEM_PROMPT;
     if (isCurrentlyGuide) {
-        setAppSettings(prev => ({...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION, isCodeExecutionEnabled: false}));
+        setAppSettings(prev => ({...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION}));
         if (activeSessionId && setCurrentChatSettings) {
-            setCurrentChatSettings(prev => ({ ...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION, isCodeExecutionEnabled: false }));
+            setCurrentChatSettings(prev => ({ ...prev, systemInstruction: DEFAULT_SYSTEM_INSTRUCTION }));
         }
     } else {
-        setAppSettings(prev => ({...prev, systemInstruction: HD_GUIDE_SYSTEM_PROMPT, isCodeExecutionEnabled: true}));
+        setAppSettings(prev => ({...prev, systemInstruction: HD_GUIDE_SYSTEM_PROMPT}));
         if (activeSessionId && setCurrentChatSettings) {
             setCurrentChatSettings(prev => ({
                 ...prev,
                 systemInstruction: HD_GUIDE_SYSTEM_PROMPT,
-                isCodeExecutionEnabled: true
             }));
         }
     }

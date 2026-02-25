@@ -61,4 +61,11 @@ export const dataSettings = {
     settingsFilesOverviewDeleting: { en: 'Deleting...', zh: '删除中...' },
     settingsFilesOverviewDeleteConfirmPrefix: { en: 'Delete remote file', zh: '删除远程文件' },
     settingsFilesOverviewDeleteConfirmSuffix: { en: 'This action cannot be undone.', zh: '此操作不可撤销。' },
-}; 
+    settingsMcpTitle: { en: 'MCP Servers', zh: 'MCP 服务器' },
+    settingsMcpGlobalToggle: { en: 'Enable MCP Globally', zh: '全局启用 MCP' },
+    settingsMcpImportJson: { en: 'Import MCP JSON', zh: '导入 MCP JSON' },
+    settingsMcpImportFile: { en: 'Import JSON File', zh: '导入 JSON 文件' },
+    settingsMcpServers: { en: 'Configured Servers', zh: '已配置服务器' },
+    settingsMcpNoServers: { en: 'No MCP servers configured.', zh: '未配置 MCP 服务器。' },
+    settingsDebugMode: { en: 'Runtime Debug Mode', zh: '运行时调试模式' },
+};

@@ -1,13 +1,10 @@
 
 import { Part, UsageMetadata, File as GeminiFile, ChatHistoryItem } from "@google/genai";
 import { ModelOption } from './settings';
-import type { ChatStreamCompleteDiagnostics, ChatToolMode } from '@all-model-chat/shared-api';
+import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
 
 export interface ChatRequestToolConfig {
-  toolMode?: ChatToolMode;
   mcpEnabledServerIds?: string[];
-  webGroundingRequired?: boolean;
-  webGroundingPolicy?: 'off' | 'warn';
 }
 
 export interface GeminiService {

@@ -250,7 +250,7 @@ export const finalizeMessages = (
                 thinkingTimeMs: thinkingTime,
                 groundingMetadata: isLastMessageOfRun ? groundingMetadata : undefined,
                 urlContextMetadata: isLastMessageOfRun ? urlContextMetadata : undefined,
-                webGrounding: isLastMessageOfRun ? diagnostics?.webGrounding : undefined,
+                mcpDiagnostics: isLastMessageOfRun ? diagnostics?.mcp : undefined,
                 promptTokens: isLastMessageOfRun ? promptTokens : undefined,
                 completionTokens: isLastMessageOfRun ? completionTokens : undefined,
                 totalTokens: isLastMessageOfRun ? totalTokens : undefined,

@@ -34,10 +34,6 @@ export const useChatInputLogic = (props: ChatInputProps) => {
         onStopGenerating,
         onProcessFiles,
         onProjectContextCreated,
-        onToggleGoogleSearch,
-        onToggleDeepSearch,
-        onToggleCodeExecution,
-        onToggleUrlContext,
         onClearChat,
         onNewChat,
         onOpenSettings,
@@ -101,7 +97,6 @@ export const useChatInputLogic = (props: ChatInputProps) => {
     // 7. Slash Commands
     const slashCommandState = useSlashCommands({
         t, 
-        onToggleGoogleSearch, onToggleDeepSearch, onToggleCodeExecution, onToggleUrlContext, 
         onClearChat, onNewChat, onOpenSettings,
         onToggleCanvasPrompt, onTogglePinCurrentSession, onRetryLastTurn, 
         onStopGenerating, onAttachmentAction: modalsState.handleAttachmentAction,

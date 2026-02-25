@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ChatMessage } from '../../../types';
 import { translations } from '../../../utils/appUtils';
@@ -13,16 +13,33 @@ interface MessageFooterProps {
 }
 
 export const MessageFooter: React.FC<MessageFooterProps> = ({ message, t, onSuggestionClick }) => {
+    const [isInvokedDetailsExpanded, setIsInvokedDetailsExpanded] = useState(false);
     const { audioSrc, audioAutoplay, suggestions, isGeneratingSuggestions, role, generationStartTime } = message;
-    const webGrounding = message.webGrounding;
-    const showWebGroundingStatus = role === 'model' && !message.isLoading && webGrounding?.required === true;
-    const countsTemplate = t('web_grounding_counts');
-    const webEvidenceCounts = countsTemplate
-        .replace('{queries}', String(webGrounding?.evidence?.webSearchQueries ?? 0))
-        .replace('{chunks}', String(webGrounding?.evidence?.webGroundingChunks ?? 0))
-        .replace('{citations}', String(webGrounding?.evidence?.citations ?? 0))
-        .replace('{urls}', String(webGrounding?.evidence?.urlContextUrls ?? 0));
-    const webGroundingIsSatisfied = webGrounding?.satisfied === true;
+    const mcpAttachedServerIds = message.mcpDiagnostics?.attachedServerIds || [];
+    const mcpRequestedServerIds = message.mcpDiagnostics?.requestedServerIds || [];
+    const mcpInvokedTools = message.mcpDiagnostics?.invokedTools || [];
+    const hasInvokedTools = mcpInvokedTools.length > 0;
+    const hasMcpDiagnostics =
+        mcpAttachedServerIds.length > 0 ||
+        mcpRequestedServerIds.length > 0 ||
+        message.mcpDiagnostics?.degraded;
+
+    const formatServerIds = (serverIds: string[]): string => {
+        const MAX_DISPLAY_COUNT = 4;
+        if (serverIds.length <= MAX_DISPLAY_COUNT) {
+            return serverIds.join(', ');
+        }
+        const head = serverIds.slice(0, MAX_DISPLAY_COUNT).join(', ');
+        return `${head} +${serverIds.length - MAX_DISPLAY_COUNT}`;
+    };
+
+    const mcpStatusText = mcpAttachedServerIds.length > 0
+        ? `${t('message_mcp_attached')}: ${formatServerIds(mcpAttachedServerIds)}`
+        : `${t('message_mcp_requested')}: ${formatServerIds(mcpRequestedServerIds)}`;
+    const invokedDetailsText = useMemo(
+        () => mcpInvokedTools.map((entry) => `${entry.serverId}.${entry.toolName}`).join(', '),
+        [mcpInvokedTools]
+    );
 
     return (
         <>
@@ -40,19 +57,31 @@ export const MessageFooter: React.FC<MessageFooterProps> = ({ message, t, onSugg
                 />
             )}
 
-            {showWebGroundingStatus && (
-                <div
-                    className={`mt-2 inline-flex items-center gap-2 text-[10px] sm:text-[11px] px-2 py-1 rounded-md border ${
-                        webGroundingIsSatisfied
-                            ? 'text-green-700 bg-green-500/10 border-green-500/20'
-                            : 'text-amber-700 bg-amber-500/10 border-amber-500/20'
-                    }`}
-                    title={webGrounding?.reason || undefined}
-                >
-                    <span className="font-semibold">
-                        {webGroundingIsSatisfied ? t('web_grounding_verified') : t('web_grounding_missing')}
-                    </span>
-                    <span className="opacity-80 font-mono">{webEvidenceCounts}</span>
+            {hasMcpDiagnostics && (
+                <div className="mt-1 flex justify-end">
+                    <div className="text-[10px] sm:text-[11px] text-[var(--theme-text-tertiary)] font-mono bg-[var(--theme-bg-tertiary)]/25 border border-[var(--theme-border-secondary)]/30 rounded-md px-2 py-0.5 max-w-full">
+                        <div className="flex flex-wrap items-center gap-x-1">
+                            <span>{mcpStatusText}</span>
+                            {message.mcpDiagnostics?.degraded && <span>{` · ${t('message_mcp_degraded')}`}</span>}
+                            {hasInvokedTools && (
+                                <>
+                                    <span>{` · ${t('message_mcp_called_count').replace('{count}', String(mcpInvokedTools.length))}`}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsInvokedDetailsExpanded((prev) => !prev)}
+                                        className="underline decoration-dotted text-[var(--theme-text-link)] hover:opacity-90"
+                                    >
+                                        {isInvokedDetailsExpanded ? t('message_mcp_hide_details') : t('message_mcp_show_details')}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        {hasInvokedTools && isInvokedDetailsExpanded && (
+                            <div className="mt-1 break-words whitespace-pre-wrap text-[10px] sm:text-[11px]">
+                                {invokedDetailsText}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

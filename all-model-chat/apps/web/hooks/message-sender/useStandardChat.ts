@@ -89,11 +89,6 @@ export const useStandardChat = ({
         const settingsForPersistence = { ...currentChatSettings };
         let settingsForApi = { ...currentChatSettings };
 
-        if (!isContinueMode && !settingsForPersistence.mcpSelectionLocked) {
-            settingsForPersistence.mcpSelectionLocked = true;
-            settingsForApi = { ...settingsForApi, mcpSelectionLocked: true };
-        }
-
         if (isFastMode) {
             const targetLevel = getFastThinkingLevelForModel(activeModelId);
 

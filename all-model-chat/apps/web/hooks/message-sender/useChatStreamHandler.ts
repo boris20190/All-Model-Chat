@@ -135,6 +135,18 @@ const buildDetailedEmptyResponseMessage = (
             : `MCP attached servers: ${diagnostics.mcp.attachedServerIds.join(', ')}`);
     }
 
+    if (diagnostics.mcp?.attachMeta?.length) {
+        const attachSummary = diagnostics.mcp.attachMeta
+            .slice(0, 5)
+            .map((entry) =>
+                `${entry.serverId}[${entry.transport}${entry.protocolVersion ? `/${entry.protocolVersion}` : ''}${typeof entry.toolCount === 'number' ? `,tools=${entry.toolCount}` : ''}${typeof entry.latencyMs === 'number' ? `,${entry.latencyMs}ms` : ''}]`
+            )
+            .join(' | ');
+        lines.push(language === 'zh'
+            ? `MCP 附加元数据: ${attachSummary}`
+            : `MCP attach metadata: ${attachSummary}`);
+    }
+
     if (diagnostics.mcp?.degraded) {
         lines.push(language === 'zh'
             ? 'MCP 已降级：请求了 MCP 但未附加任何服务器。'
@@ -144,24 +156,21 @@ const buildDetailedEmptyResponseMessage = (
     if (diagnostics.mcp?.skipped?.length) {
         const skippedSummary = diagnostics.mcp.skipped
             .slice(0, 5)
-            .map((entry) => `${entry.id}: ${entry.reason}`)
+            .map((entry) => `${entry.id}${entry.code ? `(${entry.code})` : ''}: ${entry.reason}`)
             .join(' | ');
         lines.push(language === 'zh'
             ? `MCP 跳过详情: ${skippedSummary}`
             : `MCP skipped details: ${skippedSummary}`);
     }
 
-    if (diagnostics.webGrounding?.required !== undefined) {
+    if (diagnostics.mcp?.invokedTools?.length) {
+        const invokedSummary = diagnostics.mcp.invokedTools
+            .slice(0, 8)
+            .map((entry) => `${entry.serverId}.${entry.toolName}`)
+            .join(', ');
         lines.push(language === 'zh'
-            ? `联网证据要求: required=${String(diagnostics.webGrounding.required)}, satisfied=${String(diagnostics.webGrounding.satisfied)}, reason=${diagnostics.webGrounding.reason || 'unknown'}`
-            : `Web-grounding requirement: required=${String(diagnostics.webGrounding.required)}, satisfied=${String(diagnostics.webGrounding.satisfied)}, reason=${diagnostics.webGrounding.reason || 'unknown'}`);
-    }
-
-    if (diagnostics.webGrounding?.evidence) {
-        const evidence = diagnostics.webGrounding.evidence;
-        lines.push(language === 'zh'
-            ? `联网证据计数: webSearchQueries=${String(evidence.webSearchQueries ?? 0)}, webGroundingChunks=${String(evidence.webGroundingChunks ?? 0)}, citations=${String(evidence.citations ?? 0)}, urlContextUrls=${String(evidence.urlContextUrls ?? 0)}`
-            : `Web-grounding evidence counts: webSearchQueries=${String(evidence.webSearchQueries ?? 0)}, webGroundingChunks=${String(evidence.webGroundingChunks ?? 0)}, citations=${String(evidence.citations ?? 0)}, urlContextUrls=${String(evidence.urlContextUrls ?? 0)}`);
+            ? `MCP 实际调用: ${invokedSummary}`
+            : `MCP invoked tools: ${invokedSummary}`);
     }
 
     const promptBlockedCategories = extractBlockedSafetyCategories(promptFeedback?.safetyRatings);

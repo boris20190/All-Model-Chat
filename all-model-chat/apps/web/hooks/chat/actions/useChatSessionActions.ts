@@ -1,14 +1,8 @@
 import { useCallback } from 'react';
 import { ChatSettings as IndividualChatSettings, SavedChatSession, UploadedFile } from '../../../types';
-import type { ChatToolMode, McpServerStatus } from '@all-model-chat/shared-api';
+import type { McpServerStatus } from '@all-model-chat/shared-api';
 import { cleanupFilePreviewUrls } from '../../../utils/appUtils';
-import {
-    hasBuiltinToolsEnabled,
-    hasMcpToolsSelected,
-    isCustomModeActive,
-    resolveToolMode,
-    toggleServerSelection,
-} from '../../../utils/toolMode.js';
+import { toggleServerSelection } from '../../../utils/toolMode.js';
 
 interface UseChatSessionActionsProps {
     activeSessionId: string | null;
@@ -21,33 +15,6 @@ interface UseChatSessionActionsProps {
     handleTogglePinSession: (sessionId: string) => void;
     mcpServerStatuses: McpServerStatus[];
 }
-
-const applyBuiltinMode = (settings: IndividualChatSettings): IndividualChatSettings => {
-    const builtinEnabled = hasBuiltinToolsEnabled(settings);
-
-    if (!builtinEnabled) {
-        return {
-            ...settings,
-            toolMode: hasMcpToolsSelected(settings) ? 'custom' : 'none',
-        };
-    }
-
-    return {
-        ...settings,
-        toolMode: 'builtin',
-        enabledMcpServerIds: [],
-    };
-};
-
-const disableBuiltinToggles = (settings: IndividualChatSettings): IndividualChatSettings => {
-    return {
-        ...settings,
-        isGoogleSearchEnabled: false,
-        isCodeExecutionEnabled: false,
-        isUrlContextEnabled: false,
-        isDeepSearchEnabled: false,
-    };
-};
 
 export const useChatSessionActions = ({
     activeSessionId,
@@ -93,108 +60,26 @@ export const useChatSessionActions = ({
         }
     }, [activeSessionId, handleTogglePinSession]);
 
-    const selectToolMode = useCallback((mode: ChatToolMode) => {
-        if (!activeSessionId) return;
-        if (isLoading) handleStopGenerating();
-
-        setCurrentChatSettings((prev) => {
-            const selectionLocked = !!prev.mcpSelectionLocked;
-            const mcpSelected = hasMcpToolsSelected(prev);
-
-            if (selectionLocked && mcpSelected && mode !== 'custom') {
-                return prev;
-            }
-
-            if (mode === 'custom') {
-                return {
-                    ...disableBuiltinToggles(prev),
-                    toolMode: 'custom',
-                };
-            }
-
-            if (mode === 'builtin') {
-                return {
-                    ...prev,
-                    toolMode: 'builtin',
-                    enabledMcpServerIds: [],
-                };
-            }
-
-            return {
-                ...disableBuiltinToggles(prev),
-                toolMode: 'none',
-                enabledMcpServerIds: selectionLocked ? prev.enabledMcpServerIds : [],
-            };
-        });
-    }, [activeSessionId, isLoading, setCurrentChatSettings, handleStopGenerating]);
-
     const toggleMcpServer = useCallback((serverId: string) => {
         if (!activeSessionId) return;
         if (isLoading) handleStopGenerating();
 
         const status = mcpServerStatuses.find((entry) => entry.id === serverId);
-        if (!status?.available) return;
+        if (!(status?.attachable ?? status?.available)) return;
 
         setCurrentChatSettings((prev) => {
-            if (prev.mcpSelectionLocked) return prev;
-            if (resolveToolMode(prev) === 'builtin' && hasBuiltinToolsEnabled(prev)) {
-                return prev;
-            }
-
             const nextServerIds = toggleServerSelection(prev.enabledMcpServerIds, serverId);
 
             return {
-                ...disableBuiltinToggles(prev),
+                ...prev,
                 enabledMcpServerIds: nextServerIds,
-                toolMode: nextServerIds.length > 0 ? 'custom' : 'none',
             };
         });
     }, [activeSessionId, isLoading, setCurrentChatSettings, handleStopGenerating, mcpServerStatuses]);
 
-    const toggleGoogleSearch = useCallback(() => {
-        if (!activeSessionId) return;
-        if (isLoading) handleStopGenerating();
-        setCurrentChatSettings(prev => {
-            if (isCustomModeActive(prev)) return prev;
-            return applyBuiltinMode({ ...prev, isGoogleSearchEnabled: !prev.isGoogleSearchEnabled });
-        });
-    }, [activeSessionId, isLoading, setCurrentChatSettings, handleStopGenerating]);
-
-    const toggleCodeExecution = useCallback(() => {
-        if (!activeSessionId) return;
-        if (isLoading) handleStopGenerating();
-        setCurrentChatSettings(prev => {
-            if (isCustomModeActive(prev)) return prev;
-            return applyBuiltinMode({ ...prev, isCodeExecutionEnabled: !prev.isCodeExecutionEnabled });
-        });
-    }, [activeSessionId, isLoading, setCurrentChatSettings, handleStopGenerating]);
-
-    const toggleUrlContext = useCallback(() => {
-        if (!activeSessionId) return;
-        if (isLoading) handleStopGenerating();
-        setCurrentChatSettings(prev => {
-            if (isCustomModeActive(prev)) return prev;
-            return applyBuiltinMode({ ...prev, isUrlContextEnabled: !prev.isUrlContextEnabled });
-        });
-    }, [activeSessionId, isLoading, setCurrentChatSettings, handleStopGenerating]);
-
-    const toggleDeepSearch = useCallback(() => {
-        if (!activeSessionId) return;
-        if (isLoading) handleStopGenerating();
-        setCurrentChatSettings(prev => {
-            if (isCustomModeActive(prev)) return prev;
-            return applyBuiltinMode({ ...prev, isDeepSearchEnabled: !prev.isDeepSearchEnabled });
-        });
-    }, [activeSessionId, isLoading, setCurrentChatSettings, handleStopGenerating]);
-
     return {
         handleClearCurrentChat,
         handleTogglePinCurrentSession,
-        selectToolMode,
-        toggleMcpServer,
-        toggleGoogleSearch,
-        toggleCodeExecution,
-        toggleUrlContext,
-        toggleDeepSearch
+        toggleMcpServer
     };
 };

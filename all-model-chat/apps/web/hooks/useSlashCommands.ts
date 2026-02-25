@@ -6,10 +6,6 @@ import { ModelOption } from '../types';
 
 interface UseSlashCommandsProps {
   t: (key: keyof typeof translations) => string;
-  onToggleGoogleSearch: () => void;
-  onToggleDeepSearch: () => void;
-  onToggleCodeExecution: () => void;
-  onToggleUrlContext: () => void;
   onClearChat: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
@@ -33,7 +29,6 @@ interface UseSlashCommandsProps {
 
 export const useSlashCommands = ({
   t,
-  onToggleGoogleSearch, onToggleDeepSearch, onToggleCodeExecution, onToggleUrlContext,
   onClearChat, onNewChat, onOpenSettings, onToggleCanvasPrompt,
   onTogglePinCurrentSession, onRetryLastTurn, onStopGenerating, onAttachmentAction,
   availableModels, onSelectModel, onMessageSent, setIsHelpModalOpen,
@@ -69,10 +64,6 @@ export const useSlashCommands = ({
     { name: 'edit', description: t('help_cmd_edit'), icon: 'edit', action: onEditLastUserMessage },
     { name: 'pin', description: t('help_cmd_pin'), icon: 'pin', action: onTogglePinCurrentSession },
     { name: 'retry', description: t('help_cmd_retry'), icon: 'retry', action: onRetryLastTurn },
-    { name: 'online', description: t('help_cmd_search'), icon: 'search', action: onToggleGoogleSearch },
-    { name: 'deep', description: t('help_cmd_deep'), icon: 'deep', action: onToggleDeepSearch },
-    { name: 'code', description: t('help_cmd_code'), icon: 'code', action: onToggleCodeExecution },
-    { name: 'url', description: t('help_cmd_url'), icon: 'url', action: onToggleUrlContext },
     { name: 'file', description: t('help_cmd_file'), icon: 'file', action: () => onAttachmentAction('upload') },
     { name: 'clear', description: t('help_cmd_clear'), icon: 'clear', action: onClearChat },
     { name: 'new', description: t('help_cmd_new'), icon: 'new', action: onNewChat },
@@ -83,7 +74,7 @@ export const useSlashCommands = ({
         const targetLevel = getFastThinkingLevelForModel(currentModelId);
         onSetThinkingLevel(thinkingLevel === targetLevel ? 'HIGH' : targetLevel);
     }},
-  ], [t, onToggleGoogleSearch, onToggleDeepSearch, onToggleCodeExecution, onToggleUrlContext, onClearChat, onNewChat, onOpenSettings, onToggleCanvasPrompt, onTogglePinCurrentSession, onRetryLastTurn, onStopGenerating, onAttachmentAction, setInputText, textareaRef, setIsHelpModalOpen, onEditLastUserMessage, onTogglePip, onSetThinkingLevel, thinkingLevel, currentModelId]);
+  ], [t, onClearChat, onNewChat, onOpenSettings, onToggleCanvasPrompt, onTogglePinCurrentSession, onRetryLastTurn, onStopGenerating, onAttachmentAction, setInputText, textareaRef, setIsHelpModalOpen, onEditLastUserMessage, onTogglePip, onSetThinkingLevel, thinkingLevel, currentModelId]);
   
   const allCommandsForHelp = useMemo(() => [
     ...commands.map(c => ({ name: `/${c.name}`, description: c.description, icon: c.icon })),

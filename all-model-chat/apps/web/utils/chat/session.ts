@@ -99,7 +99,18 @@ export const rehydrateSessionFiles = (session: SavedChatSession): SavedChatSessi
         return { ...message, files: newFiles };
     });
 
-    return { ...session, messages: newMessages };
+    const sanitizedSettings = sanitizeChatSettingsForStorage(
+        (session.settings || DEFAULT_CHAT_SETTINGS) as ChatSettings
+    );
+
+    return {
+        ...session,
+        settings: {
+            ...DEFAULT_CHAT_SETTINGS,
+            ...sanitizedSettings,
+        },
+        messages: newMessages,
+    };
 };
 
 /**

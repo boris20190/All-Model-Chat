@@ -9,6 +9,7 @@ import { ChatBehaviorSection } from './sections/ChatBehaviorSection';
 import { DataManagementSection } from './sections/DataManagementSection';
 import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AboutSection } from './sections/AboutSection';
+import { McpManagementSection } from './sections/McpManagementSection';
 import { Save, X } from 'lucide-react';
 import type { UseFileOverviewState } from '../../hooks/data-management/useFileOverview';
 
@@ -184,6 +185,11 @@ export const SettingsContent: React.FC<SettingsContentProps> = ({
                         onReset={onReset}
                         t={t}
                     />
+                </div>
+            )}
+            {activeTab === 'mcp' && (
+                <div className={animClass}>
+                    <McpManagementSection t={t as any} />
                 </div>
             )}
             {activeTab === 'shortcuts' && (

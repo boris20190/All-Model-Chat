@@ -65,12 +65,7 @@ export const useChatActions = ({
     const {
         handleClearCurrentChat,
         handleTogglePinCurrentSession,
-        selectToolMode,
-        toggleMcpServer,
-        toggleGoogleSearch,
-        toggleCodeExecution,
-        toggleUrlContext,
-        toggleDeepSearch
+        toggleMcpServer
     } = useChatSessionActions({
         activeSessionId,
         isLoading,
@@ -109,12 +104,7 @@ export const useChatActions = ({
         handleSelectModelInHeader,
         handleClearCurrentChat,
         handleTranscribeAudio,
-        selectToolMode,
         toggleMcpServer,
-        toggleGoogleSearch,
-        toggleCodeExecution,
-        toggleUrlContext,
-        toggleDeepSearch,
         handleTogglePinCurrentSession,
         handleUpdateMessageContent,
         handleUpdateMessageFile,

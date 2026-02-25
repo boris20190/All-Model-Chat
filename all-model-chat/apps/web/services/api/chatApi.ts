@@ -10,15 +10,9 @@ import type {
 import type { ChatRequestToolConfig } from '../../types/api';
 import { ThoughtSupportingPart } from '../../types';
 import { logService } from "../logService";
-import { getConfiguredApiClient } from "./baseApi";
 import { parseBffErrorResponse, resolveBffEndpoint } from './bffApi';
 import { BACKEND_MANAGED_KEY_SENTINEL } from '../../utils/apiUtils';
-import { normalizeWebGroundingDiagnostics } from '../../utils/webGrounding.js';
-
-interface ParsedSseEvent {
-    eventName: string;
-    payload: unknown;
-}
+import { consumeSseStream } from './sseStream';
 
 interface StreamErrorDiagnostics {
     code?: string;
@@ -31,82 +25,6 @@ interface StreamErrorDiagnostics {
 }
 
 const resolveBffStreamEndpoint = (): string => resolveBffEndpoint('/api/chat/stream');
-
-const parseSseEventBlock = (rawBlock: string): ParsedSseEvent | null => {
-    const normalized = rawBlock.replace(/\r\n/g, '\n').trim();
-    if (!normalized) return null;
-
-    let eventName = 'message';
-    const dataLines: string[] = [];
-
-    for (const line of normalized.split('\n')) {
-        if (line.startsWith('event:')) {
-            eventName = line.slice(6).trim();
-            continue;
-        }
-
-        if (line.startsWith('data:')) {
-            dataLines.push(line.slice(5).trimStart());
-        }
-    }
-
-    if (dataLines.length === 0) return null;
-
-    const rawPayload = dataLines.join('\n');
-    try {
-        return {
-            eventName,
-            payload: JSON.parse(rawPayload),
-        };
-    } catch {
-        return {
-            eventName,
-            payload: rawPayload,
-        };
-    }
-};
-
-const consumeSseStream = async (
-    response: Response,
-    abortSignal: AbortSignal,
-    onEvent: (event: ParsedSseEvent) => void
-): Promise<void> => {
-    if (!response.body) {
-        throw new Error('BFF stream response body is empty.');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (abortSignal.aborted) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        while (true) {
-            const separatorIndex = buffer.indexOf('\n\n');
-            if (separatorIndex < 0) break;
-
-            const rawBlock = buffer.slice(0, separatorIndex);
-            buffer = buffer.slice(separatorIndex + 2);
-
-            const parsed = parseSseEventBlock(rawBlock);
-            if (parsed) {
-                onEvent(parsed);
-            }
-        }
-    }
-
-    if (buffer.trim().length > 0) {
-        const parsed = parseSseEventBlock(buffer);
-        if (parsed) {
-            onEvent(parsed);
-        }
-    }
-};
 
 const tryParseJsonObject = (rawText: string | undefined): Record<string, unknown> | null => {
     if (!rawText) return null;
@@ -217,6 +135,28 @@ const createBffStreamError = (
     return error;
 };
 
+const normalizeUnknownStreamFailure = (error: unknown): StreamErrorDiagnostics | undefined => {
+    if (error == null) return undefined;
+    if (error instanceof Error && error.name === 'AbortError') return undefined;
+
+    if (typeof error === 'object' && error !== null) {
+        const raw = error as Record<string, unknown>;
+        return {
+            code: typeof raw.code === 'string' ? raw.code : undefined,
+            status: typeof raw.status === 'number' ? raw.status : undefined,
+            retryable: typeof raw.retryable === 'boolean' ? raw.retryable : undefined,
+            message: error instanceof Error ? truncateDiagnosticText(error.message) : truncateDiagnosticText(String(error)),
+            providerStatus: typeof raw.providerStatus === 'string' ? raw.providerStatus : undefined,
+            providerReason: typeof raw.providerReason === 'string' ? raw.providerReason : undefined,
+            providerMessage: typeof raw.providerMessage === 'string' ? truncateDiagnosticText(raw.providerMessage) : undefined,
+        };
+    }
+
+    return {
+        message: truncateDiagnosticText(String(error)),
+    };
+};
+
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null;
 
@@ -239,7 +179,6 @@ const normalizeCompleteDiagnostics = (payload: unknown): ChatStreamCompleteDiagn
     const mcpSource = isObjectRecord(diagnosticsSource.mcp)
         ? diagnosticsSource.mcp
         : undefined;
-    const webGrounding = normalizeWebGroundingDiagnostics(diagnosticsSource.webGrounding);
 
     const diagnostics: ChatStreamCompleteDiagnostics = {
         finishReason: typeof diagnosticsSource.finishReason === 'string' ? diagnosticsSource.finishReason : undefined,
@@ -312,12 +251,32 @@ const normalizeCompleteDiagnostics = (payload: unknown): ChatStreamCompleteDiagn
                         .map((entry) => ({
                             id: typeof entry.id === 'string' ? entry.id : 'unknown',
                             reason: typeof entry.reason === 'string' ? entry.reason : 'unknown',
+                            code: typeof entry.code === 'string' ? entry.code : undefined,
+                        }))
+                    : undefined,
+                attachMeta: Array.isArray(mcpSource.attachMeta)
+                    ? mcpSource.attachMeta
+                        .filter((entry): entry is Record<string, unknown> => isObjectRecord(entry))
+                        .map((entry) => ({
+                            serverId: typeof entry.serverId === 'string' ? entry.serverId : 'unknown',
+                            transport: typeof entry.transport === 'string' ? entry.transport : 'unknown',
+                            protocolVersion:
+                                typeof entry.protocolVersion === 'string' ? entry.protocolVersion : undefined,
+                            toolCount: typeof entry.toolCount === 'number' ? entry.toolCount : undefined,
+                            latencyMs: typeof entry.latencyMs === 'number' ? entry.latencyMs : undefined,
+                        }))
+                    : undefined,
+                invokedTools: Array.isArray(mcpSource.invokedTools)
+                    ? mcpSource.invokedTools
+                        .filter((entry): entry is Record<string, unknown> => isObjectRecord(entry))
+                        .map((entry) => ({
+                            serverId: typeof entry.serverId === 'string' ? entry.serverId : 'unknown',
+                            toolName: typeof entry.toolName === 'string' ? entry.toolName : 'unknown',
                         }))
                     : undefined,
                 degraded: typeof mcpSource.degraded === 'boolean' ? mcpSource.degraded : undefined,
             }
             : undefined,
-        webGrounding,
     };
 
     const hasAnyDiagnostics = Object.values(diagnostics).some((value) => value !== undefined);
@@ -456,6 +415,7 @@ export const sendStatelessMessageStreamApi = async (
     let sawThoughtEvent = false;
     let sawCompleteEvent = false;
     let sawErrorEvent = false;
+    let receivedEventCount = 0;
     let streamMetaProvider: string | undefined = undefined;
     let streamMetaKeyId: string | undefined = undefined;
     let latestStreamError: StreamErrorDiagnostics | undefined = undefined;
@@ -474,15 +434,8 @@ export const sendStatelessMessageStreamApi = async (
             config,
             role,
             apiKeyOverride: apiKey !== BACKEND_MANAGED_KEY_SENTINEL ? apiKey : undefined,
-            toolMode: toolConfig?.toolMode,
             mcp: toolConfig?.mcpEnabledServerIds?.length
                 ? { enabledServerIds: [...toolConfig.mcpEnabledServerIds] }
-                : undefined,
-            webGrounding: toolConfig?.webGroundingRequired
-                ? {
-                    required: true,
-                    policy: toolConfig.webGroundingPolicy ?? 'warn',
-                }
                 : undefined,
         };
 
@@ -494,12 +447,14 @@ export const sendStatelessMessageStreamApi = async (
             signal: abortSignal,
             body: JSON.stringify(requestPayload),
         });
+        const responseContentType = response.headers.get('content-type');
 
         if (!response.ok) {
             throw await parseBffErrorResponse(response);
         }
 
-        await consumeSseStream(response, abortSignal, (event) => {
+        const sseSummary = await consumeSseStream(response, abortSignal, (event) => {
+            receivedEventCount += 1;
             const payload = event.payload as any;
 
             if (event.eventName === 'meta') {
@@ -556,11 +511,32 @@ export const sendStatelessMessageStreamApi = async (
                 throw createBffStreamError(latestStreamError);
             }
         });
+
+        if (sseSummary.eventCount === 0 && !latestStreamError) {
+            const isEventStream =
+                typeof responseContentType === 'string' &&
+                responseContentType.toLowerCase().includes('text/event-stream');
+            const details = isEventStream
+                ? 'SSE stream ended without parsable events.'
+                : `Unexpected response content-type for stream: ${responseContentType || 'unknown'}.`;
+
+            latestStreamError = {
+                code: isEventStream ? 'bff_empty_sse_stream' : 'bff_unexpected_stream_content_type',
+                status: response.status,
+                message: sseSummary.trailingTextSample
+                    ? `${details} trailingSample=${sseSummary.trailingTextSample}`
+                    : details,
+            };
+        }
     } catch (error) {
         const isAborted = abortSignal.aborted || (error instanceof Error && error.name === 'AbortError');
         if (isAborted) {
             logService.warn("Streaming aborted by signal.");
             return;
+        }
+
+        if (!latestStreamError) {
+            latestStreamError = normalizeUnknownStreamFailure(error);
         }
 
         logService.error("Error sending message (stream):", error);
@@ -572,8 +548,8 @@ export const sendStatelessMessageStreamApi = async (
                 finishMessage: sawCompleteEvent
                     ? 'Complete event was received, but no diagnostics were parsed.'
                     : streamErrorSummary
-                        ? `Stream ended without complete event after upstream error: ${streamErrorSummary} (meta=${String(sawMetaEvent)}, part=${String(sawPartEvent)}, thought=${String(sawThoughtEvent)}, error=${String(sawErrorEvent)}).`
-                        : `Stream ended without complete event (meta=${String(sawMetaEvent)}, part=${String(sawPartEvent)}, thought=${String(sawThoughtEvent)}, error=${String(sawErrorEvent)}).`,
+                        ? `Stream ended without complete event after upstream error: ${streamErrorSummary} (events=${String(receivedEventCount)}, meta=${String(sawMetaEvent)}, part=${String(sawPartEvent)}, thought=${String(sawThoughtEvent)}, error=${String(sawErrorEvent)}).`
+                        : `Stream ended without complete event (events=${String(receivedEventCount)}, meta=${String(sawMetaEvent)}, part=${String(sawPartEvent)}, thought=${String(sawThoughtEvent)}, error=${String(sawErrorEvent)}).`,
                 hadCandidate: false,
                 hadCandidateParts: sawPartEvent,
                 hadThoughtChunk: sawThoughtEvent,
@@ -629,72 +605,34 @@ export const sendStatelessMessageNonStreamApi = async (
     ) => void,
     toolConfig?: ChatRequestToolConfig
 ): Promise<void> => {
-    logService.info(`Sending message via stateless generateContent (non-stream) for model ${modelId}`);
+    logService.info(`Sending message via buffered BFF stream (non-stream mode) for model ${modelId}`);
 
-    try {
-        // In backend-managed mode we still need BFF transport, even when UI streaming is disabled.
-        if (apiKey === BACKEND_MANAGED_KEY_SENTINEL) {
-            const bufferedParts: Part[] = [];
-            let bufferedThoughts = '';
+    const bufferedParts: Part[] = [];
+    let bufferedThoughts = '';
 
-            await sendStatelessMessageStreamApi(
-                apiKey,
-                modelId,
-                history,
-                parts,
-                config,
-                abortSignal,
-                (part) => bufferedParts.push(part),
-                (chunk) => {
-                    bufferedThoughts += chunk;
-                },
-                onError,
-                (usageMetadata, groundingMetadata, urlContextMetadata, _functionCallPart, diagnostics) => {
-                    onComplete(
-                        bufferedParts,
-                        bufferedThoughts || undefined,
-                        usageMetadata,
-                        groundingMetadata,
-                        urlContextMetadata,
-                        diagnostics
-                    );
-                },
-                'user',
-                toolConfig
+    await sendStatelessMessageStreamApi(
+        apiKey,
+        modelId,
+        history,
+        parts,
+        config,
+        abortSignal,
+        (part) => bufferedParts.push(part),
+        (chunk) => {
+            bufferedThoughts += chunk;
+        },
+        onError,
+        (usageMetadata, groundingMetadata, urlContextMetadata, _functionCallPart, diagnostics) => {
+            onComplete(
+                bufferedParts,
+                bufferedThoughts || undefined,
+                usageMetadata,
+                groundingMetadata,
+                urlContextMetadata,
+                diagnostics
             );
-            return;
-        }
-
-        const ai = await getConfiguredApiClient(apiKey);
-
-        if (abortSignal.aborted) { onComplete([], "", undefined, undefined, undefined); return; }
-
-        const response = await ai.models.generateContent({
-            model: modelId,
-            contents: [...history, { role: 'user', parts }],
-            config: config
-        });
-
-        if (abortSignal.aborted) { onComplete([], "", undefined, undefined, undefined); return; }
-
-        const {
-            parts: responseParts,
-            thoughts,
-            usage,
-            grounding,
-            urlContext,
-            diagnostics,
-        } = processResponse(response);
-
-        logService.info(`Stateless non-stream complete for ${modelId}.`, {
-            usage,
-            hasGrounding: !!grounding,
-            hasUrlContext: !!urlContext,
-            diagnostics,
-        });
-        onComplete(responseParts, thoughts, usage, grounding, urlContext, diagnostics);
-    } catch (error) {
-        logService.error(`Error in stateless non-stream for ${modelId}:`, error);
-        onError(error instanceof Error ? error : new Error(String(error) || "Unknown error during stateless non-streaming call."));
-    }
+        },
+        'user',
+        toolConfig
+    );
 };

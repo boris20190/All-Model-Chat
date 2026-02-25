@@ -31,10 +31,7 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
     selectedFiles, setSelectedFiles, onSendMessage, isEditing, editMode, editingMessageId, setEditingMessageId, onStopGenerating,
     onCancelEdit, onProcessFiles, onProjectContextCreated, onAddFileById, onCancelUpload, onTranscribeAudio,
     isProcessingFile, fileError, isImageEditModel, aspectRatio, setAspectRatio, imageSize, setImageSize,
-    toolMode, onSelectToolMode, enabledMcpServerIds, onToggleMcpServer, mcpSelectionLocked, mcpServers,
-    isMcpEnabled, isMcpStatusLoading, mcpStatusError,
-    isGoogleSearchEnabled, onToggleGoogleSearch, isCodeExecutionEnabled, onToggleCodeExecution,
-    isUrlContextEnabled, onToggleUrlContext, isDeepSearchEnabled, onToggleDeepSearch,
+    enabledMcpServerIds, onToggleMcpServer, mcpServers, isMcpEnabled, isMcpStatusLoading, mcpStatusError,
     onClearChat, onOpenSettings, onToggleCanvasPrompt,
     onTogglePinCurrentSession, onRetryLastTurn, onEditLastUserMessage,
     isPipSupported, isPipActive, onTogglePip,
@@ -160,24 +157,13 @@ export const ChatArea: React.FC<ChatAreaProps> = (props) => {
             setAspectRatio={setAspectRatio}
             imageSize={imageSize}
             setImageSize={setImageSize}
-            toolMode={toolMode}
-            onSelectToolMode={onSelectToolMode}
             enabledMcpServerIds={enabledMcpServerIds}
             onToggleMcpServer={onToggleMcpServer}
-            mcpSelectionLocked={mcpSelectionLocked}
             mcpServers={mcpServers}
             isMcpEnabled={isMcpEnabled}
             isMcpStatusLoading={isMcpStatusLoading}
             mcpStatusError={mcpStatusError}
             t={t}
-            isGoogleSearchEnabled={isGoogleSearchEnabled}
-            onToggleGoogleSearch={onToggleGoogleSearch}
-            isCodeExecutionEnabled={isCodeExecutionEnabled}
-            onToggleCodeExecution={onToggleCodeExecution}
-            isUrlContextEnabled={isUrlContextEnabled}
-            onToggleUrlContext={onToggleUrlContext}
-            isDeepSearchEnabled={isDeepSearchEnabled}
-            onToggleDeepSearch={onToggleDeepSearch}
             onClearChat={onClearChat}
             onNewChat={onNewChat}
             onOpenSettings={onOpenSettings}

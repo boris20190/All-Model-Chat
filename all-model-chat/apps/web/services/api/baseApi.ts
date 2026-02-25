@@ -2,16 +2,13 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { logService } from "../logService";
 import { dbService } from '../../utils/db';
-import { DEEP_SEARCH_SYSTEM_PROMPT } from "../../constants/promptConstants";
 import { SafetySetting, MediaResolution } from "../../types/settings";
-import type { ChatToolMode } from '@all-model-chat/shared-api';
 import {
     isGemini3Model,
     normalizeModelIdForComparison,
     normalizeThinkingLevelForModel,
     sanitizeApiKey
 } from "../../utils/appUtils";
-import { resolveToolMode } from '../../utils/toolMode.js';
 
 
 const POLLING_INTERVAL_MS = 2000; // 2 seconds
@@ -86,29 +83,16 @@ export const buildGenerationConfig = (
     config: { temperature?: number; topP?: number },
     showThoughts: boolean,
     thinkingBudget: number,
-    isGoogleSearchEnabled?: boolean,
-    isCodeExecutionEnabled?: boolean,
-    isUrlContextEnabled?: boolean,
     thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH',
     aspectRatio?: string,
-    isDeepSearchEnabled?: boolean,
     imageSize?: string,
     safetySettings?: SafetySetting[],
     mediaResolution?: MediaResolution,
     /** ASCII tree of project files for agentic folder access */
     projectContextTree?: string,
-    toolMode?: ChatToolMode,
-    enabledMcpServerIds?: string[],
 ): any => {
-    const normalizedToolMode = resolveToolMode({
-        toolMode,
-        enabledMcpServerIds,
-        isGoogleSearchEnabled,
-        isCodeExecutionEnabled,
-        isUrlContextEnabled,
-        isDeepSearchEnabled,
-    });
-    const hasSelectedMcpServers = Array.isArray(enabledMcpServerIds) && enabledMcpServerIds.length > 0;
+    void showThoughts;
+    void projectContextTree;
 
     if (modelId === 'gemini-2.5-flash-image-preview' || modelId === 'gemini-2.5-flash-image') {
         const imageConfig: any = {};
@@ -136,28 +120,14 @@ export const buildGenerationConfig = (
             imageConfig,
         };
 
-        // Add tools if enabled
-        const tools = [];
-        if (normalizedToolMode === 'builtin' && (isGoogleSearchEnabled || isDeepSearchEnabled)) {
-            tools.push({ googleSearch: {} });
-        }
-        if (tools.length > 0) config.tools = tools;
-
         if (systemInstruction) config.systemInstruction = systemInstruction;
 
         return config;
     }
 
-    let finalSystemInstruction = systemInstruction;
-    if (isDeepSearchEnabled) {
-        finalSystemInstruction = finalSystemInstruction
-            ? `${finalSystemInstruction}\n\n${DEEP_SEARCH_SYSTEM_PROMPT}`
-            : DEEP_SEARCH_SYSTEM_PROMPT;
-    }
-
     const generationConfig: any = {
         ...config,
-        systemInstruction: finalSystemInstruction || undefined,
+        systemInstruction: systemInstruction || undefined,
         safetySettings: safetySettings || undefined,
     };
 
@@ -217,49 +187,6 @@ export const buildGenerationConfig = (
                 includeThoughts: true, // Always capture thoughts in data; UI toggles visibility
             };
         }
-    }
-
-    const tools = [];
-    if (normalizedToolMode === 'builtin') {
-        // Deep Search requires Google Search tool
-        if (isGoogleSearchEnabled || isDeepSearchEnabled) {
-            tools.push({ googleSearch: {} });
-        }
-        if (isCodeExecutionEnabled) {
-            tools.push({ codeExecution: {} });
-        }
-        if (isUrlContextEnabled) {
-            tools.push({ urlContext: {} });
-        }
-    }
-
-    // Agentic folder access: add read_file function declaration in custom mode only.
-    // When MCP servers are selected we skip read_file because CallableTools and
-    // basic FunctionDeclarations cannot be mixed in automatic tool-calling mode.
-    if (normalizedToolMode === 'custom' && projectContextTree && !hasSelectedMcpServers) {
-        tools.push({
-            functionDeclarations: [{
-                name: "read_file",
-                description: "Read the content of a file from the user's project. Use this when you need to see code or content to answer a question about the project. Only call this for files listed in the project structure.",
-                parameters: {
-                    type: "OBJECT",
-                    properties: {
-                        filepath: {
-                            type: "STRING",
-                            description: "The relative path of the file to read, exactly as shown in the project structure (e.g., 'src/App.tsx' or 'package.json')"
-                        }
-                    },
-                    required: ["filepath"]
-                }
-            }]
-        });
-    }
-
-    if (tools.length > 0) {
-        generationConfig.tools = tools;
-        // When using tools, these should not be set
-        delete generationConfig.responseMimeType;
-        delete generationConfig.responseSchema;
     }
 
     return generationConfig;

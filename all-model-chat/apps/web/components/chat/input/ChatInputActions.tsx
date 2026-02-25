@@ -2,7 +2,6 @@ import React from 'react';
 import { AttachmentMenu } from './AttachmentMenu';
 import { ToolsMenu } from './ToolsMenu';
 import { ChatInputActionsProps } from '../../../types';
-import { WebSearchToggle } from './actions/WebSearchToggle';
 import { LiveControls } from './actions/LiveControls';
 import { RecordControls } from './actions/RecordControls';
 import { UtilityControls } from './actions/UtilityControls';
@@ -20,23 +19,12 @@ export interface ExtendedChatInputActionsProps extends ChatInputActionsProps {
 export const ChatInputActions: React.FC<ExtendedChatInputActionsProps> = ({
   onAttachmentAction,
   disabled,
-  toolMode,
-  onSelectToolMode,
   enabledMcpServerIds,
   onToggleMcpServer,
-  mcpSelectionLocked,
   mcpServers,
   isMcpEnabled,
   isMcpStatusLoading,
   mcpStatusError,
-  isGoogleSearchEnabled,
-  onToggleGoogleSearch,
-  isCodeExecutionEnabled,
-  onToggleCodeExecution,
-  isUrlContextEnabled,
-  onToggleUrlContext,
-  isDeepSearchEnabled,
-  onToggleDeepSearch,
   onAddYouTubeVideo,
   onCountTokens,
   onRecordButtonClick,
@@ -68,34 +56,14 @@ export const ChatInputActions: React.FC<ExtendedChatInputActionsProps> = ({
     <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
             <AttachmentMenu onAction={onAttachmentAction} disabled={disabled} t={t as any} />
-            
-            {isNativeAudioModel && (
-                <WebSearchToggle 
-                    isGoogleSearchEnabled={isGoogleSearchEnabled} 
-                    onToggleGoogleSearch={onToggleGoogleSearch} 
-                    disabled={disabled} 
-                    t={t as any} 
-                />
-            )}
 
             <ToolsMenu
-                toolMode={toolMode}
-                onSelectToolMode={onSelectToolMode}
                 enabledMcpServerIds={enabledMcpServerIds}
                 onToggleMcpServer={onToggleMcpServer}
-                mcpSelectionLocked={mcpSelectionLocked}
                 mcpServers={mcpServers}
                 isMcpEnabled={isMcpEnabled}
                 isMcpStatusLoading={isMcpStatusLoading}
                 mcpStatusError={mcpStatusError}
-                isGoogleSearchEnabled={isGoogleSearchEnabled}
-                onToggleGoogleSearch={onToggleGoogleSearch}
-                isCodeExecutionEnabled={isCodeExecutionEnabled}
-                onToggleCodeExecution={onToggleCodeExecution}
-                isUrlContextEnabled={isUrlContextEnabled}
-                onToggleUrlContext={onToggleUrlContext}
-                isDeepSearchEnabled={isDeepSearchEnabled}
-                onToggleDeepSearch={onToggleDeepSearch}
                 onAddYouTubeVideo={onAddYouTubeVideo}
                 onCountTokens={onCountTokens}
                 disabled={disabled}

@@ -15,7 +15,6 @@ import { ContentPart } from '../../../types/chat';
 import { generateProjectContextSystemPrompt } from '../../useFolderToolExecutor';
 import { readProjectFile } from '../../../utils/folderImportUtils';
 import type { ChatStreamCompleteDiagnostics } from '@all-model-chat/shared-api';
-import { buildWebGroundingRequest, resolveToolMode } from '../../../utils/toolMode.js';
 import {
     appendToolRoundToHistory,
     createRollingHistory,
@@ -117,13 +116,8 @@ export const useApiInteraction = ({
         const historyForChat = await createChatHistoryForApi(baseMessagesForApi, shouldStripThinking);
         const rollingHistory = createRollingHistory(historyForChat as any[], finalRole, finalParts as any[]);
         let toolRoundCount = 0;
-        const resolvedToolMode = resolveToolMode(sessionToUpdate);
-        const webGroundingRequest = buildWebGroundingRequest(sessionToUpdate, 'warn');
         const requestToolConfig = {
-            toolMode: resolvedToolMode,
             mcpEnabledServerIds: sessionToUpdate.enabledMcpServerIds || [],
-            webGroundingRequired: webGroundingRequest?.required,
-            webGroundingPolicy: webGroundingRequest?.policy,
         };
 
         // Prepare system instruction - inject project context if available
@@ -139,18 +133,12 @@ export const useApiInteraction = ({
             { temperature: sessionToUpdate.temperature, topP: sessionToUpdate.topP },
             sessionToUpdate.showThoughts,
             sessionToUpdate.thinkingBudget,
-            !!sessionToUpdate.isGoogleSearchEnabled,
-            !!sessionToUpdate.isCodeExecutionEnabled,
-            !!sessionToUpdate.isUrlContextEnabled,
             sessionToUpdate.thinkingLevel,
             aspectRatio,
-            sessionToUpdate.isDeepSearchEnabled,
             imageSize,
             sessionToUpdate.safetySettings,
             sessionToUpdate.mediaResolution,
-            projectContext?.fileTree, // Pass file tree to enable read_file tool
-            sessionToUpdate.toolMode,
-            sessionToUpdate.enabledMcpServerIds,
+            projectContext?.fileTree,
         );
 
         const shouldAutoContinueOnEmpty =
